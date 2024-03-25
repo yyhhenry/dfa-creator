@@ -178,8 +178,9 @@ impl NFA {
                 ('(', _) => stack.push(i),
                 (')', _) => {
                     let start = stack.pop().ok_or(anyhow!("Unmatched ')'"))?;
-                    let elem = &reg[start + 1..i];
-                    elem_list.push(Elem::Base(NFA::from_regex(elem)?));
+                    if stack.is_empty() {
+                        elem_list.push(Elem::Base(NFA::from_regex(&reg[start + 1..i])?));
+                    }
                 }
                 ('*', 0) => elem_list.push(Elem::Star),
                 ('|', 0) => elem_list.push(Elem::Or),
@@ -187,6 +188,7 @@ impl NFA {
                 _ => {}
             }
         }
+        dbg!(reg, &elem_list);
         // Apply all stars
         let origin_elem_list = elem_list.drain(..).collect::<Vec<_>>();
         for elem in origin_elem_list {
