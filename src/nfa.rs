@@ -1,9 +1,8 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::{
-    borrow::Borrow,
     collections::{HashMap, HashSet},
-    ops::{Add, BitOr, Mul, Range},
+    ops::Range,
 };
 type NFAToken = Option<char>;
 type NFATransition = HashMap<NFAToken, HashSet<usize>>;
