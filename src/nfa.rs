@@ -84,6 +84,8 @@ impl NFA {
         nfa.add(lhs.accept, None, accept);
         nfa.add(rhs.accept, None, accept);
         let mut p = vec![lhs.start, lhs.accept, rhs.start, rhs.accept];
+        // Merge pure states
+        // The implementation here is not optimal, but it is simple and works.
         if l_pure.0 {
             (nfa, p) = nfa.merge_state(p[0], nfa.start, p);
         }
@@ -128,6 +130,8 @@ impl NFA {
         (NFA::from(nfa_json), list)
     }
     pub fn concat(&self, rhs: &Self) -> NFA {
+        // If the start state of the right-hand side is pure, we can merge it with the accept state of the left-hand side.
+        // The implementation here is not optimal, but it is simple and works.
         let pure = self.is_pure_accept() || rhs.is_pure_start();
         let rhs = rhs.re_index(self.states.end);
         let mut transitions = self.transitions.clone();
