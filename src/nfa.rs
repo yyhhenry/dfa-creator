@@ -64,6 +64,8 @@ impl NFA {
             .insert(next);
     }
     pub fn or(&self, rhs: &Self) -> NFA {
+        let l_pure = (self.is_pure_start(), self.is_pure_accept());
+        let r_pure = (rhs.is_pure_start(), rhs.is_pure_accept());
         let start = self.states.start;
         let lhs = self.re_index(self.states.start + 1);
         let rhs = rhs.re_index(lhs.states.end);
@@ -81,15 +83,52 @@ impl NFA {
         nfa.add(start, None, rhs.start);
         nfa.add(lhs.accept, None, accept);
         nfa.add(rhs.accept, None, accept);
+        let mut p = vec![lhs.start, lhs.accept, rhs.start, rhs.accept];
+        if l_pure.0 {
+            (nfa, p) = nfa.merge_state(p[0], nfa.start, p);
+        }
+        if l_pure.1 {
+            (nfa, p) = nfa.merge_state(p[1], nfa.accept, p);
+        }
+        if r_pure.0 {
+            (nfa, p) = nfa.merge_state(p[2], nfa.start, p);
+        }
+        if r_pure.1 {
+            (nfa, _) = nfa.merge_state(p[3], nfa.accept, p);
+        }
         nfa
     }
-    pub fn concat(&self, rhs: &Self) -> NFA {
-        // If one of the NFA is empty, return the other one.
-        if self.states.len() == 1 {
-            return rhs.clone();
-        } else if rhs.states.len() == 1 {
-            return self.clone();
+    fn merge_state(&self, mut a: usize, mut b: usize, list: Vec<usize>) -> (Self, Vec<usize>) {
+        if a > b {
+            (a, b) = (b, a);
         }
+        assert!(
+            self.states.start <= a && a < b && b < self.states.end,
+            "Invalid merge state {} {} {:?}",
+            a,
+            b,
+            self.states
+        );
+        let mut nfa_json = NFAJson::from(self.clone());
+        let id = |u: usize| match u {
+            u if u < b => u,
+            u if u == b => a,
+            u => u - 1,
+        };
+        nfa_json.start = id(nfa_json.start);
+        nfa_json.accept = id(nfa_json.accept);
+        nfa_json.transitions = nfa_json
+            .transitions
+            .into_iter()
+            .map(|(s, c, n)| (id(s), c, id(n)))
+            .filter(|(s, c, n)| *s != *n || c.is_some())
+            .collect();
+        nfa_json.states = self.states.start..self.states.end - 1;
+        let list = list.into_iter().map(id).collect();
+        (NFA::from(nfa_json), list)
+    }
+    pub fn concat(&self, rhs: &Self) -> NFA {
+        let pure = self.is_pure_accept() || rhs.is_pure_start();
         let rhs = rhs.re_index(self.states.end);
         let mut transitions = self.transitions.clone();
         for (state, map) in rhs.transitions {
@@ -102,6 +141,9 @@ impl NFA {
             transitions,
         };
         nfa.add(self.accept, None, rhs.start);
+        if pure {
+            (nfa, _) = nfa.merge_state(self.accept, rhs.start, vec![]);
+        }
         nfa
     }
     pub fn to_mermaid(&self) -> String {
