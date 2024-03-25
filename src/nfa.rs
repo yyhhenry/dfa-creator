@@ -8,6 +8,13 @@ type NFAToken = Option<char>;
 type NFATransition = HashMap<NFAToken, HashSet<usize>>;
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NFAJson {
+    states: Range<usize>,
+    start: usize,
+    accept: usize,
+    transitions: Vec<(usize, Option<char>, usize)>,
+}
+#[derive(Debug, Clone)]
 pub struct NFA {
     /// States of the NFA.
     states: Range<usize>,
@@ -129,6 +136,14 @@ impl NFA {
             title, description, mermaid
         )
     }
+    pub fn to_json(&self) -> Result<String> {
+        let json = NFAJson::from(self.clone());
+        serde_json::to_string_pretty(&json).map_err(Into::into)
+    }
+    pub fn from_json(json: &str) -> Result<Self> {
+        let json: NFAJson = serde_json::from_str(json)?;
+        Ok(NFA::from(json))
+    }
     pub fn concat_all(nfa_list: &[Self]) -> Self {
         let mut result = NFA::from(None);
         for nfa in nfa_list {
@@ -246,6 +261,38 @@ impl From<NFAToken> for NFA {
                 accept: 0,
                 transitions: [].into(),
             }
+        }
+    }
+}
+impl From<NFAJson> for NFA {
+    fn from(json: NFAJson) -> Self {
+        let mut nfa = NFA {
+            states: json.states,
+            start: json.start,
+            accept: json.accept,
+            transitions: [].into(),
+        };
+        for (state, c, next) in json.transitions {
+            nfa.add(state, c, next);
+        }
+        nfa
+    }
+}
+impl From<NFA> for NFAJson {
+    fn from(nfa: NFA) -> Self {
+        let mut transitions = vec![];
+        for (state, map) in nfa.transitions {
+            for (c, set) in map {
+                for next in set {
+                    transitions.push((state, c, next));
+                }
+            }
+        }
+        NFAJson {
+            states: nfa.states,
+            start: nfa.start,
+            accept: nfa.accept,
+            transitions,
         }
     }
 }
