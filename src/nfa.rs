@@ -105,36 +105,10 @@ impl NFA {
         nfa
     }
     pub fn to_mermaid(&self) -> String {
-        let mut result = "graph TD\n".to_string();
-        for state in self.states.clone() {
-            let name = if state == self.start {
-                format!("S{}", state)
-            } else {
-                format!("{}", state)
-            };
-            let shape = if state == self.accept {
-                format!("((({})))", name)
-            } else {
-                format!("(({}))", name)
-            };
-            result.push_str(&format!("{}{}\n", state, shape));
-        }
-        for (state, map) in self.transitions.iter() {
-            for (c, set) in map.iter() {
-                let c = c.unwrap_or('ε');
-                for next in set.iter() {
-                    result.push_str(&format!("{} --> |{}| {};\n", state, c, next));
-                }
-            }
-        }
-        result
+        NFAJson::from(self.clone()).to_mermaid()
     }
     pub fn to_markdown(&self, title: &str, description: &str) -> String {
-        let mermaid = self.to_mermaid();
-        format!(
-            "# {}\n\n{}\n\n```mermaid\n{}\n```\n",
-            title, description, mermaid
-        )
+        NFAJson::from(self.clone()).to_markdown(title, description)
     }
     pub fn to_json(&self) -> Result<String> {
         let json = NFAJson::from(self.clone());
@@ -150,6 +124,22 @@ impl NFA {
             result = result.concat(nfa);
         }
         result
+    }
+    pub fn out_degree(&self, state: usize) -> usize {
+        self.transitions.get(&state).map_or(0, |map| map.len())
+    }
+    pub fn in_degree(&self, state: usize) -> usize {
+        self.transitions
+            .iter()
+            .flat_map(|(_, map)| map.values())
+            .filter(|set| set.contains(&state))
+            .count()
+    }
+    pub fn is_pure_start(&self) -> bool {
+        self.in_degree(self.start) == 0
+    }
+    pub fn is_pure_accept(&self) -> bool {
+        self.out_degree(self.accept) == 0
     }
     pub fn or_all(nfa_list: &[Self]) -> Self {
         let mut result = nfa_list[0].clone();
@@ -289,11 +279,42 @@ impl From<NFA> for NFAJson {
                 }
             }
         }
+        transitions.sort();
         NFAJson {
             states: nfa.states,
             start: nfa.start,
             accept: nfa.accept,
             transitions,
         }
+    }
+}
+impl NFAJson {
+    pub fn to_mermaid(&self) -> String {
+        let mut result = "graph TD\n".to_string();
+        for state in self.states.clone() {
+            let name = if state == self.start {
+                format!("S{}", state)
+            } else {
+                format!("{}", state)
+            };
+            let shape = if state == self.accept {
+                format!("((({})))", name)
+            } else {
+                format!("(({}))", name)
+            };
+            result.push_str(&format!("{}{}\n", state, shape));
+        }
+        for (state, c, next) in self.transitions.iter() {
+            let c = c.unwrap_or('ε');
+            result.push_str(&format!("{} --> |{}| {};\n", state, c, next));
+        }
+        result
+    }
+    pub fn to_markdown(&self, title: &str, description: &str) -> String {
+        let mermaid = self.to_mermaid();
+        format!(
+            "# {}\n\n{}\n\n```mermaid\n{}\n```\n",
+            title, description, mermaid
+        )
     }
 }
