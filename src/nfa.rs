@@ -43,69 +43,91 @@ impl NFA {
         }
     }
     pub fn star(&self) -> NFA {
-        let mut transitions = self.transitions.clone();
-        transitions
-            .entry(self.accept)
+        let mut nfa = self.re_index(self.states.start);
+        nfa.add(nfa.accept, None, nfa.start);
+        nfa.accept = nfa.start;
+        nfa
+    }
+    fn add(&mut self, state: usize, c: NFAToken, next: usize) {
+        self.transitions
+            .entry(state)
             .or_insert_with(NFATransition::new)
-            .entry(None)
+            .entry(c)
             .or_insert_with(HashSet::new)
-            .insert(self.start);
-        NFA {
-            states: self.states.clone(),
-            start: self.start,
-            accept: self.accept,
-            transitions,
-        }
+            .insert(next);
     }
     pub fn or(&self, rhs: &Self) -> NFA {
-        let rhs = rhs.re_index(self.states.end);
-        let mut transitions = self.transitions.clone();
-        for (state, map) in rhs.transitions {
-            transitions.insert(state, map);
-        }
-        transitions
-            .entry(self.accept)
-            .or_insert_with(NFATransition::new)
-            .entry(None)
-            .or_insert_with(HashSet::new)
-            .insert(rhs.start);
-        NFA {
-            states: self.states.start..rhs.states.end,
-            start: self.start,
-            accept: rhs.accept,
+        let start = self.states.start;
+        let lhs = self.re_index(self.states.start + 1);
+        let rhs = rhs.re_index(lhs.states.end);
+        let accept = rhs.states.end;
+        let end = accept + 1;
+        let mut transitions = lhs.transitions;
+        transitions.extend(rhs.transitions);
+        let mut nfa = NFA {
+            states: start..end,
+            start,
+            accept,
             transitions,
-        }
+        };
+        nfa.add(start, None, lhs.start);
+        nfa.add(start, None, rhs.start);
+        nfa.add(lhs.accept, None, accept);
+        nfa.add(rhs.accept, None, accept);
+        nfa
     }
     pub fn concat(&self, rhs: &Self) -> NFA {
+        // If one of the NFA is empty, return the other one.
+        if self.states.len() == 1 {
+            return rhs.clone();
+        } else if rhs.states.len() == 1 {
+            return self.clone();
+        }
         let rhs = rhs.re_index(self.states.end);
         let mut transitions = self.transitions.clone();
         for (state, map) in rhs.transitions {
             transitions.insert(state, map);
         }
-        transitions
-            .entry(self.accept)
-            .or_insert_with(NFATransition::new)
-            .entry(None)
-            .or_insert_with(HashSet::new)
-            .insert(rhs.start);
-        NFA {
+        let mut nfa = NFA {
             states: self.states.start..rhs.states.end,
             start: self.start,
             accept: rhs.accept,
             transitions,
-        }
+        };
+        nfa.add(self.accept, None, rhs.start);
+        nfa
     }
     pub fn to_mermaid(&self) -> String {
-        let mut result = "graph LR\n".to_string();
+        let mut result = "graph TD\n".to_string();
+        for state in self.states.clone() {
+            let name = if state == self.start {
+                format!("S{}", state)
+            } else {
+                format!("{}", state)
+            };
+            let shape = if state == self.accept {
+                format!("((({})))", name)
+            } else {
+                format!("(({}))", name)
+            };
+            result.push_str(&format!("{}{}\n", state, shape));
+        }
         for (state, map) in self.transitions.iter() {
             for (c, set) in map.iter() {
                 let c = c.unwrap_or('ε');
                 for next in set.iter() {
-                    result.push_str(&format!("{}-|{}|->{};\n", state, c, next));
+                    result.push_str(&format!("{} --> |{}| {};\n", state, c, next));
                 }
             }
         }
         result
+    }
+    pub fn to_markdown(&self, title: &str, description: &str) -> String {
+        let mermaid = self.to_mermaid();
+        format!(
+            "# {}\n\n{}\n\n```mermaid\n{}\n```\n",
+            title, description, mermaid
+        )
     }
     pub fn concat_all(nfa_list: &[Self]) -> Self {
         let mut result = NFA::from(None);
@@ -115,8 +137,8 @@ impl NFA {
         result
     }
     pub fn or_all(nfa_list: &[Self]) -> Self {
-        let mut result = NFA::from(None);
-        for nfa in nfa_list {
+        let mut result = nfa_list[0].clone();
+        for nfa in nfa_list.iter().skip(1) {
             result = result.or(nfa);
         }
         result
@@ -128,6 +150,7 @@ impl NFA {
     /// <factor> ::= <base> '*' | <base>
     /// <base> ::= <char> | '(' <regex> ')'
     pub fn from_regex(reg: &str) -> Result<Self> {
+        #[derive(Debug)]
         enum Elem {
             Base(NFA),
             Star,
@@ -136,16 +159,17 @@ impl NFA {
         let mut stack = vec![];
         let mut elem_list = vec![];
         for (i, c) in reg.chars().enumerate() {
-            match c {
-                '(' => stack.push(i),
-                ')' => {
+            match (c, stack.len()) {
+                ('(', _) => stack.push(i),
+                (')', _) => {
                     let start = stack.pop().ok_or(anyhow!("Unmatched ')'"))?;
                     let elem = &reg[start + 1..i];
                     elem_list.push(Elem::Base(NFA::from_regex(elem)?));
                 }
-                '*' => elem_list.push(Elem::Star),
-                '|' => elem_list.push(Elem::Or),
-                _ => elem_list.push(Elem::Base(NFA::from(Some(c)))),
+                ('*', 0) => elem_list.push(Elem::Star),
+                ('|', 0) => elem_list.push(Elem::Or),
+                (_, 0) => elem_list.push(Elem::Base(NFA::from(Some(c)))),
+                _ => {}
             }
         }
         // Apply all stars
@@ -171,7 +195,39 @@ impl NFA {
                 }
             }
         }
-        Ok(Self::or_all(&result))
+        let result = Self::or_all(&result);
+        Ok(result)
+    }
+    pub fn epsilon_closure(&self, state: HashSet<usize>) -> HashSet<usize> {
+        let mut result = state.clone();
+        let mut stack = state.iter().cloned().collect::<Vec<_>>();
+        while let Some(state) = stack.pop() {
+            if let Some(set) = self.transitions.get(&state) {
+                if let Some(next_set) = set.get(&None) {
+                    for next in next_set {
+                        if result.insert(*next) {
+                            stack.push(*next);
+                        }
+                    }
+                }
+            }
+        }
+        result
+    }
+    pub fn test(&self, s: &str) -> bool {
+        let mut current = self.epsilon_closure([self.start].into());
+        for c in s.chars() {
+            let mut next = HashSet::new();
+            for state in current {
+                if let Some(set) = self.transitions.get(&state) {
+                    if let Some(next_set) = set.get(&Some(c)) {
+                        next.extend(next_set);
+                    }
+                }
+            }
+            current = self.epsilon_closure(next);
+        }
+        current.contains(&self.accept)
     }
 }
 impl From<NFAToken> for NFA {
