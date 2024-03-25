@@ -4,10 +4,12 @@ use dfa_creator::nfa;
 
 #[derive(Parser)]
 struct Args {
+    /// Regular expression.
+    /// Supported operators: `*`, `|`, `()`.
     regex: String,
     /// Output file
     /// If not provided, the output will be printed to stdout.
-    /// Supported formats: md, json
+    /// Supported formats: md, json.
     #[clap(short, long)]
     output: Option<String>,
 }
