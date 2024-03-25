@@ -188,7 +188,6 @@ impl NFA {
                 _ => {}
             }
         }
-        dbg!(reg, &elem_list);
         // Apply all stars
         let origin_elem_list = elem_list.drain(..).collect::<Vec<_>>();
         for elem in origin_elem_list {
