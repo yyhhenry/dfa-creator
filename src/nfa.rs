@@ -414,9 +414,12 @@ mod test {
     fn priority_test() {
         let nfa_a = NFA::from_regex("a*|b*").unwrap();
         let nfa_b = NFA::from_regex("(a|b)*").unwrap();
-        let test_all = |s: &str| (nfa_a.test(s), nfa_b.test(s));
-        assert_eq!(test_all("aaa"), (true, true));
-        assert_eq!(test_all("aba"), (false, true));
+        let nfa_c = NFA::from_regex("a*b*").unwrap();
+        let test_all = |s: &str| (nfa_a.test(s), nfa_b.test(s), nfa_c.test(s));
+        assert_eq!(test_all("aaa"), (true, true, true));
+        assert_eq!(test_all("bbb"), (true, true, true));
+        assert_eq!(test_all("abb"), (false, true, true));
+        assert_eq!(test_all("aba"), (false, true, false));
     }
 
     #[test]
