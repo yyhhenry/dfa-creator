@@ -64,7 +64,7 @@ impl NFA {
         nfa.states.end += 1;
         nfa.add(nfa.accept, None, new_state);
         nfa.add(new_state, None, nfa.start);
-        let mut p = vec![nfa.start, nfa.accept, new_state];
+        let mut p = vec![nfa.start, new_state, nfa.accept];
         if pure.0 {
             (nfa, p) = nfa.merge_state(p[0], p[1], p);
         }
@@ -503,5 +503,12 @@ mod test {
         assert_eq!(nfa.test("b"), true);
         assert_eq!(nfa.test("abbaab"), true);
         assert_eq!(nfa.test("ababa"), false);
+
+        let nfa = NFA::from_regex("(ab*)*").unwrap();
+        assert_eq!(nfa.test(""), true);
+        assert_eq!(nfa.test("a"), true);
+        assert_eq!(nfa.test("b"), false);
+        assert_eq!(nfa.test("abbaab"), true);
+        assert_eq!(nfa.test("baa"), false);
     }
 }
