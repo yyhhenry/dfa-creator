@@ -3,6 +3,8 @@ use std::{
     collections::{HashMap, HashSet},
     ops::Range,
 };
+
+use crate::nfa::{NFAJson, NFA};
 type DFAToken = char;
 type DFATransition = HashMap<DFAToken, usize>;
 
@@ -33,6 +35,26 @@ impl DFA {
     pub fn from_json(json: &str) -> serde_json::error::Result<Self> {
         let dfa_json: DFAJson = serde_json::from_str(json)?;
         Ok(DFA::from(dfa_json))
+    }
+    pub fn to_nfa(&self) -> NFA {
+        let mut dfa_json = DFAJson::from(self.clone());
+        let accept = dfa_json.states.end;
+        dfa_json.states.end += 1;
+        let transitions = dfa_json
+            .transitions
+            .into_iter()
+            .map(|(from, token, to)| (from, Some(token), to));
+        let new_accept_transitions = dfa_json
+            .accept
+            .into_iter()
+            .map(|state| (state, None, accept));
+        let nfa_json = NFAJson {
+            states: dfa_json.states,
+            start: dfa_json.start,
+            accept,
+            transitions: transitions.chain(new_accept_transitions).collect(),
+        };
+        NFA::from(nfa_json)
     }
 }
 impl From<DFAJson> for DFA {
