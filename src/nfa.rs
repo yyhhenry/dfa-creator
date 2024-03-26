@@ -59,8 +59,20 @@ impl NFA {
     }
     pub fn star(&self) -> NFA {
         let mut nfa = self.re_index(self.states.start);
-        nfa.add(nfa.accept, None, nfa.start);
-        nfa.accept = nfa.start;
+        let pure = (self.is_pure_start(), self.is_pure_accept());
+        let new_state = nfa.states.end;
+        nfa.states.end += 1;
+        nfa.add(nfa.accept, None, new_state);
+        nfa.add(new_state, None, nfa.start);
+        let mut p = vec![nfa.start, nfa.accept, new_state];
+        if pure.0 {
+            (nfa, p) = nfa.merge_state(p[0], p[1], p);
+        }
+        if pure.1 {
+            (nfa, p) = nfa.merge_state(p[1], p[2], p);
+        }
+        nfa.start = p[1];
+        nfa.accept = p[1];
         nfa
     }
     fn add(&mut self, state: usize, c: NFAToken, next: usize) {
@@ -481,5 +493,15 @@ mod test {
         assert_eq!(nfa.test("b"), true);
         assert_eq!(nfa.test("a"), false);
         assert_eq!(nfa.test("bb"), false);
+    }
+
+    #[test]
+    fn star_test() {
+        let nfa = NFA::from_regex("(a*b)*").unwrap();
+        assert_eq!(nfa.test(""), true);
+        assert_eq!(nfa.test("a"), false);
+        assert_eq!(nfa.test("b"), true);
+        assert_eq!(nfa.test("abbaab"), true);
+        assert_eq!(nfa.test("ababa"), false);
     }
 }
