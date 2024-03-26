@@ -14,13 +14,13 @@ pub enum RegexSyntaxError {
 
 type NFAToken = Option<char>;
 type NFATransition = HashMap<NFAToken, HashSet<usize>>;
-#[allow(dead_code)]
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NFAJson {
+struct NFAJson {
     states: Range<usize>,
     start: usize,
     accept: usize,
-    transitions: Vec<(usize, Option<char>, usize)>,
+    transitions: Vec<(usize, NFAToken, usize)>,
 }
 #[derive(Debug, Clone)]
 pub struct NFA {
