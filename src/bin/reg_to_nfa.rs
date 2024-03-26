@@ -30,7 +30,7 @@ fn main() -> Result<()> {
                 "NFA",
                 &format!("NFA created from regular expression: `{}`.", args.regex),
             ),
-            "json" => nfa.to_json()?,
+            "json" => nfa.to_json(),
             _ => return Err(anyhow!("Invalid format")),
         };
         std::fs::write(&path, content)?;

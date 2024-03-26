@@ -1,9 +1,17 @@
-use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     ops::Range,
 };
+use thiserror::Error;
+#[derive(Error, Debug, Clone)]
+pub enum RegexSyntaxError {
+    #[error("Unmatched Parentheses: {0}")]
+    UnmatchedParentheses(String),
+    #[error("No Element to Star: {0}")]
+    NoElementToStar(String),
+}
+
 type NFAToken = Option<char>;
 type NFATransition = HashMap<NFAToken, HashSet<usize>>;
 #[allow(dead_code)]
@@ -156,11 +164,11 @@ impl NFA {
     pub fn to_markdown(&self, title: &str, description: &str) -> String {
         NFAJson::from(self.clone()).to_markdown(title, description)
     }
-    pub fn to_json(&self) -> Result<String> {
+    pub fn to_json(&self) -> String {
         let json = NFAJson::from(self.clone());
-        serde_json::to_string_pretty(&json).map_err(Into::into)
+        serde_json::to_string_pretty(&json).unwrap()
     }
-    pub fn from_json(json: &str) -> Result<Self> {
+    pub fn from_json(json: &str) -> serde_json::error::Result<Self> {
         let json: NFAJson = serde_json::from_str(json)?;
         Ok(NFA::from(json))
     }
@@ -200,7 +208,7 @@ impl NFA {
     /// <term> ::= <factor> <term> | <factor>
     /// <factor> ::= <base> '*' | <base>
     /// <base> ::= <char> | '(' <regex> ')'
-    pub fn from_regex(reg: &str) -> Result<Self> {
+    pub fn from_regex(reg: &str) -> Result<Self, RegexSyntaxError> {
         #[derive(Debug)]
         enum Elem {
             Base(NFA),
@@ -213,7 +221,9 @@ impl NFA {
             match (c, stack.len()) {
                 ('(', _) => stack.push(i),
                 (')', _) => {
-                    let start = stack.pop().ok_or(anyhow!("Unmatched ')'"))?;
+                    let start = stack.pop().ok_or_else(|| {
+                        RegexSyntaxError::UnmatchedParentheses(format!("')' at {} in {}", i, reg))
+                    })?;
                     if stack.is_empty() {
                         elem_list.push(Elem::Base(NFA::from_regex(&reg[start + 1..i])?));
                     }
@@ -224,13 +234,19 @@ impl NFA {
                 _ => {}
             }
         }
+        if !stack.is_empty() {
+            return Err(RegexSyntaxError::UnmatchedParentheses(format!(
+                "'(' at {} in {}",
+                stack[0], reg
+            )));
+        }
         // Apply all stars
         let origin_elem_list = elem_list.drain(..).collect::<Vec<_>>();
         for elem in origin_elem_list {
             match elem {
                 Elem::Star => match elem_list.pop() {
                     Some(Elem::Base(prev)) => elem_list.push(Elem::Base(prev.star())),
-                    _ => return Err(anyhow!("No NFA to apply star")),
+                    _ => return Err(RegexSyntaxError::NoElementToStar(reg.to_string())),
                 },
                 elem => elem_list.push(elem),
             }
@@ -239,7 +255,7 @@ impl NFA {
         for elem in elem_list {
             match elem {
                 Elem::Base(nfa) => {
-                    let prev = result.pop().ok_or(anyhow!("No NFA to concat"))?;
+                    let prev = result.pop().unwrap();
                     result.push(prev.concat(&nfa));
                 }
                 _ => {
@@ -362,5 +378,88 @@ impl NFAJson {
             "# {}\n\n{}\n\n```mermaid\n{}\n```\n",
             title, description, mermaid
         )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn basic_test() {
+        let nfa = NFA::from_regex("a(b|c)*d").unwrap();
+        assert_eq!(nfa.test("ad"), true);
+        assert_eq!(nfa.test("abd"), true);
+        assert_eq!(nfa.test("acd"), true);
+        assert_eq!(nfa.test("abbd"), true);
+        assert_eq!(nfa.test("abccccbcd"), true);
+        assert_eq!(nfa.test("a"), false);
+        assert_eq!(nfa.test("aabcccd"), false);
+        assert_eq!(nfa.test("abccc"), false);
+        assert_eq!(nfa.test("_"), false);
+    }
+    #[test]
+    fn nest_test() {
+        let nfa = NFA::from_regex("_|((a|b)*|(c|d)*)").unwrap();
+        assert_eq!(nfa.test("_"), true);
+        assert_eq!(nfa.test("abbab"), true);
+        assert_eq!(nfa.test("cdcd"), true);
+        assert_eq!(nfa.test("abcd"), false);
+        assert_eq!(nfa.test("_a"), false);
+        assert_eq!(nfa.test("_abcd"), false);
+    }
+
+    #[test]
+    fn priority_test() {
+        let nfa_a = NFA::from_regex("a*|b*").unwrap();
+        let nfa_b = NFA::from_regex("(a|b)*").unwrap();
+        let test_all = |s: &str| (nfa_a.test(s), nfa_b.test(s));
+        assert_eq!(test_all("aaa"), (true, true));
+        assert_eq!(test_all("aba"), (false, true));
+    }
+
+    #[test]
+    fn syntax_error_test() {
+        // Unmatched '('
+        let nfa = NFA::from_regex("a(b|c*d");
+        assert_eq!(
+            nfa.unwrap_err().to_string(),
+            "Unmatched Parentheses: '(' at 1 in a(b|c*d"
+        );
+        // Unmatched '('
+        let nfa = NFA::from_regex("a(b|c)*d)");
+        assert_eq!(
+            nfa.unwrap_err().to_string(),
+            "Unmatched Parentheses: ')' at 8 in a(b|c)*d)"
+        );
+        // No element to star
+        let nfa = NFA::from_regex("a(*b|c)d");
+        assert_eq!(nfa.unwrap_err().to_string(), "No Element to Star: *b|c");
+
+        let nfa = NFA::from_regex("a|*c");
+        assert_eq!(nfa.unwrap_err().to_string(), "No Element to Star: a|*c");
+    }
+
+    #[test]
+    fn json_test() {
+        let nfa = NFA::from_regex("a(b|c)*d").unwrap();
+        let json = nfa.to_json();
+        let nfa2 = NFA::from_json(&json).unwrap();
+        assert_eq!(nfa.test("ad"), nfa2.test("ad"));
+        assert_eq!(nfa.test("abd"), nfa2.test("abd"));
+        assert_eq!(nfa.test("acd"), nfa2.test("acd"));
+        assert_eq!(nfa.test("abbd"), nfa2.test("abbd"));
+        assert_eq!(nfa.test("abccccbcd"), nfa2.test("abccccbcd"));
+        assert_eq!(nfa.test("a"), nfa2.test("a"));
+        assert_eq!(nfa.test("aabcccd"), nfa2.test("aabcccd"));
+        assert_eq!(nfa.test("abccc"), nfa2.test("abccc"));
+        assert_eq!(nfa.test("_"), nfa2.test("_"));
+    }
+
+    #[test]
+    fn json_order_test() {
+        let nfa = NFA::from_regex("a(b|c)*d").unwrap();
+        let json = nfa.to_json();
+        let nfa2 = NFA::from_json(&json).unwrap();
+        assert_eq!(nfa.to_json(), nfa2.to_json());
     }
 }
