@@ -94,16 +94,16 @@ impl NFA {
         let mut p = vec![lhs.start, lhs.accept, rhs.start, rhs.accept];
         // Merge pure states
         // The implementation here is not optimal, but it is simple and works.
-        if l_pure.0 {
+        if l_pure.0 && p[0] != nfa.accept {
             (nfa, p) = nfa.merge_state(p[0], nfa.start, p);
         }
-        if l_pure.1 {
+        if l_pure.1 && p[1] != nfa.start {
             (nfa, p) = nfa.merge_state(p[1], nfa.accept, p);
         }
-        if r_pure.0 {
+        if r_pure.0 && p[2] != nfa.accept {
             (nfa, p) = nfa.merge_state(p[2], nfa.start, p);
         }
-        if r_pure.1 {
+        if r_pure.1 && p[3] != nfa.start {
             (nfa, _) = nfa.merge_state(p[3], nfa.accept, p);
         }
         nfa
@@ -468,5 +468,18 @@ mod test {
         let json = nfa.to_json();
         let nfa2 = NFA::from_json(&json).unwrap();
         assert_eq!(nfa.to_json(), nfa2.to_json());
+    }
+
+    #[test]
+    fn empty_test() {
+        let nfa = NFA::from_regex("").unwrap();
+        assert_eq!(nfa.test(""), true);
+        assert_eq!(nfa.test("a"), false);
+
+        let nfa = NFA::from_regex("(|b)|").unwrap();
+        assert_eq!(nfa.test(""), true);
+        assert_eq!(nfa.test("b"), true);
+        assert_eq!(nfa.test("a"), false);
+        assert_eq!(nfa.test("bb"), false);
     }
 }
