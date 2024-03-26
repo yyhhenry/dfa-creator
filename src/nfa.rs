@@ -58,6 +58,9 @@ impl NFA {
         }
     }
     pub fn star(&self) -> NFA {
+        if self.start == self.accept {
+            return self.clone();
+        }
         let mut nfa = self.re_index(self.states.start);
         let pure = (self.is_pure_start(), self.is_pure_accept());
         let new_state = nfa.states.end;
