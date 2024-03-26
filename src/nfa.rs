@@ -354,7 +354,9 @@ impl From<NFA> for NFAJson {
 }
 impl NFAJson {
     pub fn to_mermaid(&self) -> String {
-        let mut result = "graph TD\n".to_string();
+        let mut result = "".to_string();
+        result.push_str("%%{ init: { 'theme': 'neutral' } }%%\n");
+        result.push_str("graph TD\n");
         for state in self.states.clone() {
             let name = if state == self.start {
                 format!("S{}", state)
