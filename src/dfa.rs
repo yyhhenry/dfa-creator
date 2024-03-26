@@ -7,11 +7,11 @@ type DFAToken = char;
 type DFATransition = HashMap<DFAToken, usize>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct DFAJson {
-    states: Range<usize>,
-    start: usize,
-    accept: HashSet<usize>,
-    transitions: Vec<(usize, DFAToken, usize)>,
+pub struct DFAJson {
+    pub states: Range<usize>,
+    pub start: usize,
+    pub accept: HashSet<usize>,
+    pub transitions: Vec<(usize, DFAToken, usize)>,
 }
 
 #[derive(Debug, Clone)]

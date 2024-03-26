@@ -16,11 +16,11 @@ type NFAToken = Option<char>;
 type NFATransition = HashMap<NFAToken, HashSet<usize>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct NFAJson {
-    states: Range<usize>,
-    start: usize,
-    accept: usize,
-    transitions: Vec<(usize, NFAToken, usize)>,
+pub struct NFAJson {
+    pub states: Range<usize>,
+    pub start: usize,
+    pub accept: usize,
+    pub transitions: Vec<(usize, NFAToken, usize)>,
 }
 #[derive(Debug, Clone)]
 pub struct NFA {
