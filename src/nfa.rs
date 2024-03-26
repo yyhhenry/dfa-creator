@@ -204,10 +204,12 @@ impl NFA {
     }
     /// Create an NFA from a regular expression.
     /// We only support the following syntax:
+    /// ```txt
     /// <regex> ::= <term> '|' <regex> | <term>
     /// <term> ::= <factor> <term> | <factor>
     /// <factor> ::= <base> '*' | <base>
     /// <base> ::= <char> | '(' <regex> ')'
+    /// ```
     pub fn from_regex(reg: &str) -> Result<Self, RegexSyntaxError> {
         #[derive(Debug)]
         enum Elem {
