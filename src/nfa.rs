@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Range,
-};
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
+
+use crate::numberer::{DisjointSet, Numberer};
 #[derive(Error, Debug)]
 pub enum RegexSyntaxError {
     #[error("Unmatched Parentheses: {0}")]
@@ -15,33 +14,66 @@ pub enum RegexSyntaxError {
 pub enum FromNFAJsonError {
     #[error("Json Error: {0}")]
     SyntaxError(#[from] serde_json::error::Error),
-    #[error("NFAJson is not well formed")]
-    NotWellFormed,
 }
+type State = usize;
 type NFAToken = Option<char>;
 type NFATransition = HashMap<NFAToken, HashSet<usize>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NFAJson {
-    pub states: Range<usize>,
-    pub start: usize,
-    pub accept: usize,
-    pub transitions: Vec<(usize, NFAToken, usize)>,
+    pub start: State,
+    pub accept: State,
+    pub transitions: Vec<(State, NFAToken, State)>,
 }
 impl NFAJson {
-    pub fn is_well_formed(&self) -> bool {
-        self.states.contains(&self.start)
-            && self.states.contains(&self.accept)
-            && self
-                .transitions
-                .iter()
-                .all(|(s, _, n)| self.states.contains(s) && self.states.contains(n))
+    /// Re-index the states of the NFA.
+    /// Returns the new size and the re-indexed NFA.
+    pub fn re_index(&self, index: usize) -> (usize, Self) {
+        let mut r = Numberer::from(index);
+        let start = r.i(self.start);
+        let accept = r.i(self.accept);
+        let transitions: Vec<_> = self
+            .transitions
+            .iter()
+            .map(|(s, c, n)| (r.i(*s), c.clone(), r.i(*n)))
+            .collect();
+        (
+            r.len(),
+            Self {
+                start,
+                accept,
+                transitions,
+            },
+        )
+    }
+    /// Merge the states by the disjoint set.
+    /// You should ensure that the disjoint set is generated from the same NFA.
+    /// In other words, the NFA should be re-indexed from 0 before merging.
+    pub fn merge_by(&self, m: DisjointSet) -> Self {
+        let m = m.to_map();
+        let transitions: Vec<_> = self
+            .transitions
+            .iter()
+            .map(|(s, c, n)| (m[s], c.clone(), m[n]))
+            .filter(|(s, c, n)| s != n || c.is_some())
+            .collect();
+        Self {
+            start: m[&self.start],
+            accept: m[&self.accept],
+            transitions,
+        }
+    }
+    /// Check if the start has no incoming transitions and the accept has no outgoing transitions.
+    /// Returns (is_pure_start, is_pure_accept)
+    pub fn is_pure(&self) -> (bool, bool) {
+        (
+            self.transitions.iter().all(|(_, _, t)| t != &self.start),
+            self.transitions.iter().all(|(s, _, _)| s != &self.accept),
+        )
     }
 }
 #[derive(Debug, Clone)]
 pub struct NFA {
-    /// States of the NFA.
-    states: Range<usize>,
     /// The start state of the NFA.
     start: usize,
     /// The accept state of the NFA.
@@ -53,46 +85,40 @@ pub struct NFA {
     transitions: HashMap<usize, NFATransition>,
 }
 impl NFA {
-    pub fn re_index(&self, start: usize) -> Self {
-        let id = |d: &usize| *d - self.states.start + start;
-        let re_index_transition = |transition: &NFATransition| {
-            transition
-                .iter()
-                .map(|(c, set)| (c.clone(), set.iter().map(id).collect()))
-                .collect()
-        };
-        let transitions = self
-            .transitions
-            .iter()
-            .map(|(state, map)| (id(state), re_index_transition(map)))
-            .collect();
-        NFA {
-            states: start..start + self.states.len(),
-            start: self.start + start,
-            accept: self.accept + start,
-            transitions,
-        }
+    /// Re-index the states of the NFA.
+    /// Returns the new size and the re-indexed NFA.
+    pub fn re_index(&self, index: usize) -> (usize, Self) {
+        let (size, json) = NFAJson::from(self.clone()).re_index(index);
+        (size, NFA::try_from(json).unwrap())
+    }
+    /// Merge the states by the disjoint set.
+    /// You should ensure that the disjoint set is generated from the same NFA.
+    /// In other words, the NFA should be re-indexed from 0 before merging.
+    pub fn merge_by(&self, m: DisjointSet) -> Self {
+        let json = NFAJson::from(self.clone()).merge_by(m);
+        NFA::try_from(json).unwrap()
     }
     pub fn star(&self) -> NFA {
-        if self.start == self.accept {
-            return self.clone();
+        let (size, mut nfa) = self.re_index(0);
+        if nfa.start == nfa.accept {
+            // No need to add a new start state
+            return nfa;
         }
-        let mut nfa = self.re_index(self.states.start);
-        let pure = (self.is_pure_start(), self.is_pure_accept());
-        let new_state = nfa.states.end;
-        nfa.states.end += 1;
-        nfa.add(nfa.accept, None, new_state);
-        nfa.add(new_state, None, nfa.start);
-        let mut p = vec![nfa.start, new_state, nfa.accept];
+        let pure = nfa.is_pure();
+        let (ss, s, t) = (size, nfa.start, nfa.accept);
+        let size = size + 1;
+        nfa.add(ss, None, s);
+        nfa.add(t, None, ss);
+        nfa.start = ss;
+        nfa.accept = ss;
+        let mut m = DisjointSet::new(size);
         if pure.0 {
-            (nfa, p) = nfa.merge_state(p[0], p[1], p);
+            m.union(ss, s);
         }
         if pure.1 {
-            (nfa, p) = nfa.merge_state(p[1], p[2], p);
+            m.union(ss, t);
         }
-        nfa.start = p[1];
-        nfa.accept = p[1];
-        nfa
+        nfa.merge_by(m)
     }
     fn add(&mut self, state: usize, c: NFAToken, next: usize) {
         self.transitions
@@ -103,91 +129,64 @@ impl NFA {
             .insert(next);
     }
     pub fn or(&self, rhs: &Self) -> NFA {
-        let l_pure = (self.is_pure_start(), self.is_pure_accept());
-        let r_pure = (rhs.is_pure_start(), rhs.is_pure_accept());
-        let start = self.states.start;
-        let lhs = self.re_index(self.states.start + 1);
-        let rhs = rhs.re_index(lhs.states.end);
-        let accept = rhs.states.end;
-        let end = accept + 1;
-        let mut transitions = lhs.transitions;
-        transitions.extend(rhs.transitions);
+        let (sl, lhs) = self.re_index(0);
+        let (sr, rhs) = rhs.re_index(sl);
+
+        let l_pure = lhs.is_pure();
+        let r_pure = rhs.is_pure();
+
+        let mut r = Numberer::from(sl + sr);
+        let (ls, lt) = (lhs.start, lhs.accept);
+        let (rs, rt) = (rhs.start, rhs.accept);
+        let (ss, tt) = (r.i("ss"), r.i("tt"));
+        let size = r.end();
+
         let mut nfa = NFA {
-            states: start..end,
-            start,
-            accept,
-            transitions,
+            start: ss,
+            accept: tt,
+            transitions: lhs.transitions.into_iter().chain(rhs.transitions).collect(),
         };
-        nfa.add(start, None, lhs.start);
-        nfa.add(start, None, rhs.start);
-        nfa.add(lhs.accept, None, accept);
-        nfa.add(rhs.accept, None, accept);
-        let mut p = vec![lhs.start, lhs.accept, rhs.start, rhs.accept];
-        // Merge pure states
-        // The implementation here is not optimal, but it is simple and works.
-        if l_pure.0 && p[0] != nfa.accept {
-            (nfa, p) = nfa.merge_state(p[0], nfa.start, p);
+        nfa.add(ss, None, ls);
+        nfa.add(ss, None, rs);
+        nfa.add(lt, None, tt);
+        nfa.add(rt, None, tt);
+        let mut m = DisjointSet::new(size);
+        if l_pure.0 && !m.same(ls, tt) {
+            m.union(ls, ss);
         }
-        if l_pure.1 && p[1] != nfa.start {
-            (nfa, p) = nfa.merge_state(p[1], nfa.accept, p);
+        if l_pure.1 && !m.same(lt, ss) {
+            m.union(lt, tt);
         }
-        if r_pure.0 && p[2] != nfa.accept {
-            (nfa, p) = nfa.merge_state(p[2], nfa.start, p);
+        if r_pure.0 && !m.same(rs, tt) {
+            m.union(rs, ss);
         }
-        if r_pure.1 && p[3] != nfa.start {
-            (nfa, _) = nfa.merge_state(p[3], nfa.accept, p);
+        if r_pure.1 && !m.same(rt, ss) {
+            m.union(rt, tt);
         }
-        nfa
-    }
-    fn merge_state(&self, mut a: usize, mut b: usize, list: Vec<usize>) -> (Self, Vec<usize>) {
-        if a > b {
-            (a, b) = (b, a);
-        }
-        assert!(
-            self.states.start <= a && a < b && b < self.states.end,
-            "Invalid merge state {} {} {:?}",
-            a,
-            b,
-            self.states
-        );
-        let mut nfa_json = NFAJson::from(self.clone());
-        let id = |u: usize| match u {
-            u if u < b => u,
-            u if u == b => a,
-            u => u - 1,
-        };
-        nfa_json.start = id(nfa_json.start);
-        nfa_json.accept = id(nfa_json.accept);
-        nfa_json.transitions = nfa_json
-            .transitions
-            .into_iter()
-            .map(|(s, c, n)| (id(s), c, id(n)))
-            .filter(|(s, c, n)| *s != *n || c.is_some())
-            .collect();
-        nfa_json.states = self.states.start..self.states.end - 1;
-        let list = list.into_iter().map(id).collect();
-        (NFA::try_from(nfa_json).unwrap(), list)
+        nfa.merge_by(m)
     }
     pub fn concat(&self, rhs: &Self) -> NFA {
-        // If the start state of the right-hand side is pure, we can merge it with the accept state of the left-hand side.
-        // The implementation here is not optimal, but it is simple and works.
-        let pure = self.is_pure_accept() || rhs.is_pure_start();
-        let rhs = rhs.re_index(self.states.end);
-        let mut transitions = self.transitions.clone();
-        for (state, map) in rhs.transitions {
-            transitions.insert(state, map);
-        }
+        let (sl, lhs) = self.re_index(0);
+        let (sr, rhs) = rhs.re_index(sl);
+
+        let l_pure = lhs.is_pure();
+        let r_pure = rhs.is_pure();
+
+        let (ls, lt) = (lhs.start, lhs.accept);
+        let (rs, rt) = (rhs.start, rhs.accept);
+        let size = sl + sr;
+
         let mut nfa = NFA {
-            states: self.states.start..rhs.states.end,
-            start: self.start,
-            accept: rhs.accept,
-            transitions,
+            start: ls,
+            accept: rt,
+            transitions: lhs.transitions.into_iter().chain(rhs.transitions).collect(),
         };
-        nfa.add(self.accept, None, rhs.start);
-        if pure {
-            (nfa, _) = nfa.merge_state(self.accept, rhs.start, vec![]);
+        nfa.add(lt, None, rs);
+        let mut m = DisjointSet::new(size);
+        if l_pure.1 || r_pure.0 {
+            m.union(lt, rs);
         }
-        nfa
+        nfa.merge_by(m)
     }
     pub fn to_mermaid(&self) -> String {
         NFAJson::from(self.clone()).to_mermaid()
@@ -199,9 +198,9 @@ impl NFA {
         let json = NFAJson::from(self.clone());
         serde_json::to_string_pretty(&json).unwrap()
     }
-    pub fn from_json(json: &str) -> Result<NFA, FromNFAJsonError> {
+    pub fn from_json(json: &str) -> serde_json::error::Result<Self> {
         let json: NFAJson = serde_json::from_str(json)?;
-        NFA::try_from(json)
+        Ok(NFA::from(json))
     }
     pub fn concat_all(nfa_list: &[Self]) -> Self {
         let mut result = NFA::from(None);
@@ -210,21 +209,8 @@ impl NFA {
         }
         result
     }
-    pub fn out_degree(&self, state: usize) -> usize {
-        self.transitions.get(&state).map_or(0, |map| map.len())
-    }
-    pub fn in_degree(&self, state: usize) -> usize {
-        self.transitions
-            .iter()
-            .flat_map(|(_, map)| map.values())
-            .filter(|set| set.contains(&state))
-            .count()
-    }
-    pub fn is_pure_start(&self) -> bool {
-        self.in_degree(self.start) == 0
-    }
-    pub fn is_pure_accept(&self) -> bool {
-        self.out_degree(self.accept) == 0
+    pub fn is_pure(&self) -> (bool, bool) {
+        NFAJson::from(self.clone()).is_pure()
     }
     pub fn or_all(nfa_list: &[Self]) -> Self {
         let mut result = nfa_list[0].clone();
@@ -335,14 +321,12 @@ impl From<NFAToken> for NFA {
     fn from(c: NFAToken) -> Self {
         if c.is_some() {
             NFA {
-                states: 0..2,
                 start: 0,
                 accept: 1,
                 transitions: [(0, [(c, [1].into())].into())].into(),
             }
         } else {
             NFA {
-                states: 0..1,
                 start: 0,
                 accept: 0,
                 transitions: [].into(),
@@ -350,14 +334,9 @@ impl From<NFAToken> for NFA {
         }
     }
 }
-impl TryFrom<NFAJson> for NFA {
-    type Error = FromNFAJsonError;
-    fn try_from(json: NFAJson) -> Result<Self, Self::Error> {
-        if !json.is_well_formed() {
-            return Err(FromNFAJsonError::NotWellFormed);
-        }
+impl From<NFAJson> for NFA {
+    fn from(json: NFAJson) -> Self {
         let mut nfa = NFA {
-            states: json.states,
             start: json.start,
             accept: json.accept,
             transitions: [].into(),
@@ -365,7 +344,7 @@ impl TryFrom<NFAJson> for NFA {
         for (state, c, next) in json.transitions {
             nfa.add(state, c, next);
         }
-        Ok(nfa)
+        nfa
     }
 }
 impl From<NFA> for NFAJson {
@@ -380,7 +359,6 @@ impl From<NFA> for NFAJson {
         }
         transitions.sort();
         NFAJson {
-            states: nfa.states,
             start: nfa.start,
             accept: nfa.accept,
             transitions,
@@ -392,20 +370,21 @@ impl NFAJson {
         let mut result = "".to_string();
         result.push_str("%%{ init: { 'theme': 'neutral' } }%%\n");
         result.push_str("graph TD\n");
-        for state in self.states.clone() {
-            let name = if state == self.start {
+        let (size, nfa) = self.re_index(0);
+        for state in 0..size {
+            let name = if state == nfa.start {
                 format!("S{}", state)
             } else {
                 format!("{}", state)
             };
-            let shape = if state == self.accept {
+            let shape = if state == nfa.accept {
                 format!("((({})))", name)
             } else {
                 format!("(({}))", name)
             };
             result.push_str(&format!("{}{}\n", state, shape));
         }
-        for (state, c, next) in self.transitions.iter() {
+        for (state, c, next) in nfa.transitions {
             let c = c.unwrap_or('ε');
             result.push_str(&format!("{} --> |{}| {};\n", state, c, next));
         }
@@ -435,6 +414,25 @@ mod test {
         assert_eq!(nfa.test("aabcccd"), false);
         assert_eq!(nfa.test("abccc"), false);
         assert_eq!(nfa.test("_"), false);
+    }
+    #[test]
+    fn re_index_test() {
+        let nfa = NFA::from_regex("a(b|c)*d").unwrap();
+        let (size, nfa_a) = nfa.re_index(0);
+        let nfa_b = nfa_a.merge_by(DisjointSet::new(size));
+        let test_all = |s: &str| {
+            assert_eq!(nfa.test(s), nfa_a.test(s));
+            assert_eq!(nfa.test(s), nfa_b.test(s));
+        };
+        test_all("ad");
+        test_all("abd");
+        test_all("acd");
+        test_all("abbd");
+        test_all("abccccbcd");
+        test_all("a");
+        test_all("aabcccd");
+        test_all("abccc");
+        test_all("_");
     }
     #[test]
     fn nest_test() {
