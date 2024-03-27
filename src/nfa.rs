@@ -4,14 +4,20 @@ use std::{
     ops::Range,
 };
 use thiserror::Error;
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum RegexSyntaxError {
     #[error("Unmatched Parentheses: {0}")]
     UnmatchedParentheses(String),
     #[error("No Element to Star: {0}")]
     NoElementToStar(String),
 }
-
+#[derive(Error, Debug)]
+pub enum FromNFAJsonError {
+    #[error("Json Error: {0}")]
+    SyntaxError(#[from] serde_json::error::Error),
+    #[error("NFAJson is not well formed")]
+    NotWellFormed,
+}
 type NFAToken = Option<char>;
 type NFATransition = HashMap<NFAToken, HashSet<usize>>;
 
@@ -21,6 +27,16 @@ pub struct NFAJson {
     pub start: usize,
     pub accept: usize,
     pub transitions: Vec<(usize, NFAToken, usize)>,
+}
+impl NFAJson {
+    pub fn is_well_formed(&self) -> bool {
+        self.states.contains(&self.start)
+            && self.states.contains(&self.accept)
+            && self
+                .transitions
+                .iter()
+                .all(|(s, _, n)| self.states.contains(s) && self.states.contains(n))
+    }
 }
 #[derive(Debug, Clone)]
 pub struct NFA {
@@ -150,7 +166,7 @@ impl NFA {
             .collect();
         nfa_json.states = self.states.start..self.states.end - 1;
         let list = list.into_iter().map(id).collect();
-        (NFA::from(nfa_json), list)
+        (NFA::try_from(nfa_json).unwrap(), list)
     }
     pub fn concat(&self, rhs: &Self) -> NFA {
         // If the start state of the right-hand side is pure, we can merge it with the accept state of the left-hand side.
@@ -183,9 +199,9 @@ impl NFA {
         let json = NFAJson::from(self.clone());
         serde_json::to_string_pretty(&json).unwrap()
     }
-    pub fn from_json(json: &str) -> serde_json::error::Result<Self> {
+    pub fn from_json(json: &str) -> Result<NFA, FromNFAJsonError> {
         let json: NFAJson = serde_json::from_str(json)?;
-        Ok(NFA::from(json))
+        NFA::try_from(json)
     }
     pub fn concat_all(nfa_list: &[Self]) -> Self {
         let mut result = NFA::from(None);
@@ -334,8 +350,12 @@ impl From<NFAToken> for NFA {
         }
     }
 }
-impl From<NFAJson> for NFA {
-    fn from(json: NFAJson) -> Self {
+impl TryFrom<NFAJson> for NFA {
+    type Error = FromNFAJsonError;
+    fn try_from(json: NFAJson) -> Result<Self, Self::Error> {
+        if !json.is_well_formed() {
+            return Err(FromNFAJsonError::NotWellFormed);
+        }
         let mut nfa = NFA {
             states: json.states,
             start: json.start,
@@ -345,7 +365,7 @@ impl From<NFAJson> for NFA {
         for (state, c, next) in json.transitions {
             nfa.add(state, c, next);
         }
-        nfa
+        Ok(nfa)
     }
 }
 impl From<NFA> for NFAJson {

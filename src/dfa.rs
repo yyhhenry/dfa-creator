@@ -54,7 +54,7 @@ impl DFA {
             accept,
             transitions: transitions.chain(new_accept_transitions).collect(),
         };
-        NFA::from(nfa_json)
+        NFA::try_from(nfa_json).unwrap()
     }
 }
 impl From<DFAJson> for DFA {
