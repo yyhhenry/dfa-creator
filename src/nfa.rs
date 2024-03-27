@@ -31,12 +31,13 @@ impl NFAJson {
     pub fn re_index(&self, index: usize) -> (usize, Self) {
         let mut r = Numberer::from(index);
         let start = r.i(self.start);
-        let accept = r.i(self.accept);
-        let transitions: Vec<_> = self
-            .transitions
-            .iter()
-            .map(|(s, c, n)| (r.i(*s), c.clone(), r.i(*n)))
+        let mut transitions = self.transitions.clone();
+        transitions.sort();
+        let transitions: Vec<_> = transitions
+            .into_iter()
+            .map(|(s, c, n)| (r.i(s), c.clone(), r.i(n)))
             .collect();
+        let accept = r.i(self.accept);
         (
             r.len(),
             Self {
