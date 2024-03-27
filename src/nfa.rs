@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::{
+    borrow::Borrow,
+    collections::{HashMap, HashSet},
+};
 use thiserror::Error;
 
 use crate::numberer::{DisjointSet, Numberer};
@@ -35,7 +38,7 @@ impl NFAJson {
         transitions.sort();
         let transitions: Vec<_> = transitions
             .into_iter()
-            .map(|(s, c, n)| (r.i(s), c.clone(), r.i(n)))
+            .map(|(s, c, n)| (r.i(s), c, r.i(n)))
             .collect();
         let accept = r.i(self.accept);
         (
@@ -55,7 +58,7 @@ impl NFAJson {
         let transitions: Vec<_> = self
             .transitions
             .iter()
-            .map(|(s, c, n)| (m[s], c.clone(), m[n]))
+            .map(|(s, c, n)| (m[s], *c, m[n]))
             .filter(|(s, c, n)| s != n || c.is_some())
             .collect();
         Self {
@@ -89,14 +92,14 @@ impl NFA {
     /// Re-index the states of the NFA.
     /// Returns the new size and the re-indexed NFA.
     pub fn re_index(&self, index: usize) -> (usize, Self) {
-        let (size, json) = NFAJson::from(self.clone()).re_index(index);
+        let (size, json) = NFAJson::from(self).re_index(index);
         (size, NFA::try_from(json).unwrap())
     }
     /// Merge the states by the disjoint set.
     /// You should ensure that the disjoint set is generated from the same NFA.
     /// In other words, the NFA should be re-indexed from 0 before merging.
     pub fn merge_by(&self, m: DisjointSet) -> Self {
-        let json = NFAJson::from(self.clone()).merge_by(m);
+        let json = NFAJson::from(self).merge_by(m);
         NFA::try_from(json).unwrap()
     }
     pub fn star(&self) -> NFA {
@@ -190,13 +193,13 @@ impl NFA {
         nfa.merge_by(m)
     }
     pub fn to_mermaid(&self) -> String {
-        NFAJson::from(self.clone()).to_mermaid()
+        NFAJson::from(self).to_mermaid()
     }
     pub fn to_markdown(&self, title: &str, description: &str) -> String {
-        NFAJson::from(self.clone()).to_markdown(title, description)
+        NFAJson::from(self).to_markdown(title, description)
     }
     pub fn to_json(&self) -> String {
-        let json = NFAJson::from(self.clone());
+        let json = NFAJson::from(self);
         serde_json::to_string_pretty(&json).unwrap()
     }
     pub fn from_json(json: &str) -> serde_json::error::Result<Self> {
@@ -211,7 +214,7 @@ impl NFA {
         result
     }
     pub fn is_pure(&self) -> (bool, bool) {
-        NFAJson::from(self.clone()).is_pure()
+        NFAJson::from(self).is_pure()
     }
     pub fn or_all(nfa_list: &[Self]) -> Self {
         let mut result = nfa_list[0].clone();
@@ -286,7 +289,8 @@ impl NFA {
         let result = Self::or_all(&result);
         Ok(result)
     }
-    pub fn epsilon_closure(&self, state: HashSet<usize>) -> HashSet<usize> {
+    pub fn epsilon_closure(&self, state: impl Borrow<HashSet<usize>>) -> HashSet<usize> {
+        let state: &HashSet<_> = state.borrow();
         let mut result = state.clone();
         let mut stack = state.iter().cloned().collect::<Vec<_>>();
         while let Some(state) = stack.pop() {
@@ -303,7 +307,7 @@ impl NFA {
         result
     }
     pub fn test(&self, s: &str) -> bool {
-        let mut current = self.epsilon_closure([self.start].into());
+        let mut current = self.epsilon_closure(HashSet::from([self.start]));
         for c in s.chars() {
             let mut next = HashSet::new();
             for state in current {
@@ -335,26 +339,31 @@ impl From<NFAToken> for NFA {
         }
     }
 }
-impl From<NFAJson> for NFA {
-    fn from(json: NFAJson) -> Self {
+impl<T> From<T> for NFA
+where
+    T: Borrow<NFAJson>,
+{
+    fn from(nfa_json: T) -> Self {
+        let json: &NFAJson = nfa_json.borrow();
         let mut nfa = NFA {
             start: json.start,
             accept: json.accept,
             transitions: [].into(),
         };
-        for (state, c, next) in json.transitions {
-            nfa.add(state, c, next);
+        for (state, c, next) in json.transitions.iter() {
+            nfa.add(*state, *c, *next);
         }
         nfa
     }
 }
-impl From<NFA> for NFAJson {
-    fn from(nfa: NFA) -> Self {
+impl<T: Borrow<NFA>> From<T> for NFAJson {
+    fn from(nfa: T) -> Self {
+        let nfa: &NFA = nfa.borrow();
         let mut transitions = vec![];
-        for (state, map) in nfa.transitions {
+        for (state, map) in nfa.transitions.iter() {
             for (c, set) in map {
                 for next in set {
-                    transitions.push((state, c, next));
+                    transitions.push((*state, *c, *next));
                 }
             }
         }
