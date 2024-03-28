@@ -113,6 +113,16 @@ impl DFA {
         };
         NFA::from(nfa_json)
     }
+    pub fn test(&self, input: &str) -> bool {
+        let mut state = self.start;
+        for c in input.chars() {
+            state = match self.transitions.get(&state).and_then(|t| t.get(&c)) {
+                Some(&to) => to,
+                None => return false,
+            };
+        }
+        self.accept.contains(&state)
+    }
 }
 impl<T: Borrow<DFAJson>> From<T> for DFA {
     fn from(json: T) -> Self {
