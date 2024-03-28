@@ -345,10 +345,7 @@ impl From<Token> for NFA {
         }
     }
 }
-impl<T> From<T> for NFA
-where
-    T: Borrow<NFAJson>,
-{
+impl<T: Borrow<NFAJson>> From<T> for NFA {
     fn from(nfa_json: T) -> Self {
         let json: &NFAJson = nfa_json.borrow();
         let mut nfa = NFA {
