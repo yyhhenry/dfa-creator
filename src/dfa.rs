@@ -147,10 +147,41 @@ impl<T: Borrow<DFA>> From<T> for DFAJson {
                 transitions.push((*from, *token, *to));
             }
         }
+        transitions.sort();
         Self {
             start: dfa.start,
             accept: dfa.accept.clone(),
             transitions,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn json_test() {
+        let dfa_json = DFAJson {
+            start: 0,
+            accept: [1].into(),
+            transitions: vec![(0, 'a', 1), (0, 'b', 1)],
+        };
+        let dfa = DFA::from(&dfa_json);
+        assert_eq!(dfa_json.to_json(), dfa.to_json());
+    }
+
+    #[test]
+    fn test_fn_test() {
+        let dfa_json = DFAJson {
+            start: 0,
+            accept: [1].into(),
+            transitions: vec![(0, 'a', 1), (1, 'b', 0)],
+        };
+        let dfa = DFA::from(dfa_json);
+        assert_eq!(dfa.test("ab"), false);
+        assert_eq!(dfa.test("ba"), false);
+        assert_eq!(dfa.test("a"), true);
+        assert_eq!(dfa.test("aba"), true);
     }
 }
