@@ -14,19 +14,18 @@ pub enum RegexSyntaxError {
     NoElementToStar(String),
 }
 #[derive(Error, Debug)]
-pub enum FromNFAJsonError {
-    #[error("Json Error: {0}")]
+pub enum FromJsonError {
+    #[error("From Json Error: {0}")]
     SyntaxError(#[from] serde_json::error::Error),
 }
-type State = usize;
-type NFAToken = Option<char>;
-type NFATransition = HashMap<NFAToken, HashSet<usize>>;
+type Token = Option<char>;
+type Transition = HashMap<Token, HashSet<usize>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NFAJson {
-    pub start: State,
-    pub accept: State,
-    pub transitions: Vec<(State, NFAToken, State)>,
+    pub start: usize,
+    pub accept: usize,
+    pub transitions: Vec<(usize, Token, usize)>,
 }
 impl NFAJson {
     /// Re-index the states of the NFA.
@@ -75,7 +74,14 @@ impl NFAJson {
             self.transitions.iter().all(|(s, _, _)| s != &self.accept),
         )
     }
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap()
+    }
+    pub fn from_json(json: &str) -> Result<Self, FromJsonError> {
+        serde_json::from_str(json).map_err(FromJsonError::SyntaxError)
+    }
 }
+
 #[derive(Debug, Clone)]
 pub struct NFA {
     /// The start state of the NFA.
@@ -86,7 +92,7 @@ pub struct NFA {
     /// Transitions of the NFA.
     /// state -> (character -> states)
     /// The key None represents epsilon transitions.
-    transitions: HashMap<usize, NFATransition>,
+    transitions: HashMap<usize, Transition>,
 }
 impl NFA {
     /// Re-index the states of the NFA.
@@ -124,10 +130,10 @@ impl NFA {
         }
         nfa.merge_by(m)
     }
-    fn add(&mut self, state: usize, c: NFAToken, next: usize) {
+    fn add(&mut self, state: usize, c: Token, next: usize) {
         self.transitions
             .entry(state)
-            .or_insert_with(NFATransition::new)
+            .or_insert_with(Transition::new)
             .entry(c)
             .or_insert_with(HashSet::new)
             .insert(next);
@@ -200,11 +206,11 @@ impl NFA {
     }
     pub fn to_json(&self) -> String {
         let json = NFAJson::from(self);
-        serde_json::to_string_pretty(&json).unwrap()
+        json.to_json()
     }
-    pub fn from_json(json: &str) -> serde_json::error::Result<Self> {
-        let json: NFAJson = serde_json::from_str(json)?;
-        Ok(NFA::from(json))
+    pub fn from_json(json: &str) -> Result<Self, FromJsonError> {
+        let json = NFAJson::from_json(json)?;
+        Ok(Self::from(json))
     }
     pub fn concat_all(nfa_list: &[Self]) -> Self {
         let mut result = NFA::from(None);
@@ -322,8 +328,8 @@ impl NFA {
         current.contains(&self.accept)
     }
 }
-impl From<NFAToken> for NFA {
-    fn from(c: NFAToken) -> Self {
+impl From<Token> for NFA {
+    fn from(c: Token) -> Self {
         if c.is_some() {
             NFA {
                 start: 0,
