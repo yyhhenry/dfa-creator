@@ -23,4 +23,6 @@ cargo r -r -- min tmp/n2d -o tmp/dfa
 cargo r -r -- min tmp/n2d -o tmp/dfa.json
 # Test DFA JSON
 cargo r -r -- run "baaab" -i tmp/dfa
+# Show DFA JSON as Markdown
+cargo r -r -- show tmp/dfa -o tmp/show
 ```
