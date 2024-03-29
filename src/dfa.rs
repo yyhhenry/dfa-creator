@@ -1,6 +1,6 @@
 use crate::{
     nfa::{NFAJson, NFA},
-    numberer::{DisjointSet, Numberer},
+    numberer::{set2s, DisjointSet, Numberer},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -186,107 +186,122 @@ impl DFA {
     /// Returns the minimized DFA and the description of the minimization process.
     /// The description is a markdown string.
     /// You should make sure there is no unreachable states in the DFA.
-    // pub fn minimize(&self) -> (Self, String) {
-    //     let (size, dfa) = self.re_index(0);
-    //     let transitions = DFAJson::from(&dfa).transitions;
-    //     let mut markdown = "# Minimization of DFA\n".to_string();
-    //     markdown.push_str("\n## Initial DFA\n");
-    //     markdown.push_str(&dfa.to_inline_mermaid());
+    pub fn minimize(&self) -> (Self, String) {
+        let (size, dfa) = self.re_index(0);
+        let mut markdown = "# Minimization of DFA\n".to_string();
+        markdown.push_str("\n## Initial DFA\n");
+        markdown.push_str(&dfa.to_inline_mermaid());
 
-    //     let mut groups = vec![BTreeSet::new(), BTreeSet::new()];
-    //     for i in 0..size {
-    //         let group = dfa.accept.contains(&i) as usize;
-    //         groups[group].insert(i);
-    //     }
-    //     fn get_groups_of(groups: &Vec<BTreeSet<usize>>) -> BTreeMap<usize, usize> {
-    //         groups
-    //             .iter()
-    //             .enumerate()
-    //             .flat_map(|(i, group)| group.iter().map(move |&s| (s, i)))
-    //             .collect()
-    //     }
-    //     /// Find the (g, c) that group g can be divided by token c.
-    //     fn find_break_point(dfa: &DFA, groups: &Vec<BTreeSet<usize>>) -> Option<(usize, Token)> {
-    //         let group_of = get_groups_of(groups);
-    //         fn find_group_break_point(
-    //             dfa: &DFA,
-    //             group: &BTreeSet<usize>,
-    //             group_of: &BTreeMap<usize, usize>,
-    //         ) -> Option<Token> {
-    //             let mut next_c = BTreeSet::new();
-    //             for &s in group {
-    //                 if let Some(transition) = dfa.transitions.get(&s) {
-    //                     for c in transition.keys() {
-    //                         next_c.insert(*c);
-    //                     }
-    //                 }
-    //             }
-    //             for c in next_c {
-    //                 let mut next_group = BTreeMap::new();
-    //                 for &s in group {
-    //                     let to = dfa
-    //                         .transitions
-    //                         .get(&s)
-    //                         .and_then(|t| t.get(&c))
-    //                         .map(|&to| group_of[&to]);
-    //                     next_group.entry(to).or_insert_with(BTreeSet::new).insert(s);
-    //                 }
-    //                 if next_group.len() > 1 {
-    //                     return Some(c);
-    //                 }
-    //             }
-    //             None
-    //         }
-    //         for (g, group) in groups.iter().enumerate() {
-    //             if let Some(c) = find_group_break_point(dfa, group, &group_of) {
-    //                 return Some((g, c));
-    //             }
-    //         }
-    //         None
-    //     }
-    //     fn groups2s(index: &mut usize, groups: &Vec<BTreeSet<usize>>) -> String {
-    //         let groups: Vec<_> = groups
-    //             .iter()
-    //             .map(|g| format!("\\{{ {} \\}}", set2s(g)))
-    //             .collect();
-    //         let i = *index;
-    //         *index += 1;
-    //         format!("\n$ P_{{{}}} = ({}) $\n", i, groups.join(""))
-    //     }
-    //     markdown.push_str("\n## Minimization Process\n");
-    //     let mut index = 0;
-    //     markdown.push_str(&groups2s(&mut index, &groups));
-    //     while let Some((g, c)) = find_break_point(&dfa, &groups) {
-    //         markdown.push_str(&format!(
-    //             "\n$\\{{{}\\}}$ can be divided by {}\n",
-    //             set2s(&groups[g]),
-    //             c
-    //         ));
-    //         let group_of = get_groups_of(&groups);
-    //         let mut new_groups = vec![BTreeSet::<usize>::new(); groups.len() + 1];
-    //         for &s in &groups[g] {
-    //             let next = dfa.transitions.get(&s).and_then(|t| t.get(&c).cloned());
-    //             if let Some(next) = next {
-    //                 let next_g = group_of[&next];
-    //                 markdown.push_str(&format!(
-    //                     "{} with {} goes to {} in $\\{{ {} \\}}$",
-    //                     s,
-    //                     c,
-    //                     next,
-    //                     set2s(&groups[next_g])
-    //                 ));
-    //             } else {
-    //                 markdown.push_str(&format!("{} cannot go with {}", s, c));
-    //             }
-    //         }
-    //         unimplemented!()
-    //     }
-    //     unimplemented!(
-    //         "TODO: Simplify the DFA and generate the description. {} {}",
-    //         size,
-    //         dfa.to_json()
-    //     );
-    // }
+        let mut groups = vec![BTreeSet::new(), BTreeSet::new()];
+        for i in 0..size {
+            let group = dfa.accept.contains(&i) as usize;
+            groups[group].insert(i);
+        }
+        fn get_groups_of(groups: &Vec<BTreeSet<usize>>) -> BTreeMap<usize, usize> {
+            groups
+                .iter()
+                .enumerate()
+                .flat_map(|(i, group)| group.iter().map(move |&s| (s, i)))
+                .collect()
+        }
+        /// Find the (g, c) that group g can be divided by token c.
+        fn find_break_point(dfa: &DFA, groups: &Vec<BTreeSet<usize>>) -> Option<(usize, Token)> {
+            let group_of = get_groups_of(groups);
+            fn find_group_break_point(
+                dfa: &DFA,
+                group: &BTreeSet<usize>,
+                group_of: &BTreeMap<usize, usize>,
+            ) -> Option<Token> {
+                let mut next_c = BTreeSet::new();
+                for &s in group {
+                    if let Some(transition) = dfa.transitions.get(&s) {
+                        for c in transition.keys() {
+                            next_c.insert(*c);
+                        }
+                    }
+                }
+                for c in next_c {
+                    let mut next_group = BTreeMap::new();
+                    for &s in group {
+                        let to = dfa
+                            .transitions
+                            .get(&s)
+                            .and_then(|t| t.get(&c))
+                            .map(|&to| group_of[&to]);
+                        next_group.entry(to).or_insert_with(BTreeSet::new).insert(s);
+                    }
+                    if next_group.len() > 1 {
+                        return Some(c);
+                    }
+                }
+                None
+            }
+            for (g, group) in groups.iter().enumerate() {
+                if let Some(c) = find_group_break_point(dfa, group, &group_of) {
+                    return Some((g, c));
+                }
+            }
+            None
+        }
+        fn groups2s(index: &mut usize, groups: &Vec<BTreeSet<usize>>) -> String {
+            let groups: Vec<_> = groups
+                .iter()
+                .map(|g| format!("\\{{ {} \\}}", set2s(g)))
+                .collect();
+            let i = *index;
+            *index += 1;
+            format!("\n$ P_{{{}}} = ({}) $\n", i, groups.join(""))
+        }
+        markdown.push_str("\n## Minimization Process\n");
+        let mut index = 0;
+        markdown.push_str(&groups2s(&mut index, &groups));
+        while let Some((g, c)) = find_break_point(&dfa, &groups) {
+            markdown.push_str(&format!(
+                "\n$\\{{{}\\}}$ can be divided by {}\n",
+                set2s(&groups[g]),
+                c
+            ));
+            let group_of = get_groups_of(&groups);
+            let mut new_groups = BTreeMap::new();
+            for &s in &groups[g] {
+                let next = dfa.transitions.get(&s).and_then(|t| t.get(&c).cloned());
+                if let Some(next) = next {
+                    let next_g = group_of[&next];
+                    new_groups
+                        .entry(Some(next_g))
+                        .or_insert_with(BTreeSet::new)
+                        .insert(s);
+                    markdown.push_str(&format!(
+                        "{} with {} goes to {} in $\\{{ {} \\}}$",
+                        s,
+                        c,
+                        next,
+                        set2s(&groups[next_g])
+                    ));
+                } else {
+                    new_groups
+                        .entry(None)
+                        .or_insert_with(BTreeSet::new)
+                        .insert(s);
+                    markdown.push_str(&format!("{} cannot go with {}", s, c));
+                }
+            }
+            groups.remove(g);
+            groups.extend(new_groups.into_iter().map(|(_, g)| g));
+            markdown.push_str(&groups2s(&mut index, &groups));
+        }
+        markdown.push_str("\n## Minimized DFA\n");
+        let mut set = DisjointSet::new(size);
+        for group in groups.into_iter() {
+            let g: Vec<_> = group.into_iter().collect();
+            for i in 1..g.len() {
+                set.union(g[0], g[i]);
+            }
+        }
+        let dfa = dfa.merge_by(set);
+        markdown.push_str(&dfa.to_inline_mermaid());
+        (dfa, markdown)
+    }
     pub fn test(&self, input: &str) -> bool {
         let mut state = self.start;
         for c in input.chars() {
