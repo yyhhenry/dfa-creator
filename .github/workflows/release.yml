@@ -1,0 +1,46 @@
+on:
+  push:
+    tags:
+      - "v*"
+
+name: Release
+
+jobs:
+  build-linux:
+    name: Upload Linux Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Set Up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Build project
+        run: cargo build --release
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "target/release/dfa-creator"
+          bodyFile: "README.md"
+          token: ${{ secrets.GITHUB_TOKEN }}
+  build-windows:
+    name: Upload Windows Release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Set Up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Build project
+        run: cargo build --release --target x86_64-pc-windows-msvc
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "target/release/dfa-creator.exe"
+          bodyFile: "README.md"
+          token: ${{ secrets.GITHUB_TOKEN }}
