@@ -29,11 +29,22 @@ impl DFAJson {
     /// Returns the new size of the DFAJson and the re-indexed DFAJson.
     pub fn re_index(&self, index: usize) -> (usize, Self) {
         let mut r = Numberer::from(index);
+        let mut states: Vec<_> = self
+            .transitions
+            .iter()
+            .flat_map(|(s, _, n)| [*s, *n])
+            .chain([self.start])
+            .chain(self.accept.iter().cloned())
+            .collect();
+        states.sort_unstable();
+        for state in states {
+            r.i(state);
+        }
         let start = r.i(self.start);
-        let mut transitions = self.transitions.clone();
-        transitions.sort();
-        let transitions: Vec<_> = transitions
-            .into_iter()
+        let transitions: Vec<_> = self
+            .transitions
+            .iter()
+            .cloned()
             .map(|(s, c, n)| (r.i(s), c, r.i(n)))
             .collect();
         let accept = self.accept.iter().map(|i| r.i(*i)).collect();
@@ -95,11 +106,11 @@ impl DFAJson {
     }
     pub fn to_inline_mermaid(&self) -> String {
         let mermaid = self.to_mermaid();
-        format!("#\n```mermaid\n{}\n```\n", mermaid)
+        format!("\n```mermaid\n{}\n```\n", mermaid)
     }
     pub fn to_markdown(&self, title: &str, description: &str) -> String {
         let mermaid = self.to_inline_mermaid();
-        format!("# {}\n\n{}\n\n{}", title, description, mermaid)
+        format!("# {}\n\n{}\n{}", title, description, mermaid)
     }
 }
 
@@ -114,6 +125,20 @@ pub struct DFA {
     transitions: HashMap<usize, Transition>,
 }
 impl DFA {
+    /// Re-index the DFA to start from `index`.
+    /// Returns the new size of the DFA and the re-indexed DFA.
+    pub fn re_index(&self, index: usize) -> (usize, DFAJson) {
+        let dfa_json: DFAJson = self.into();
+        dfa_json.re_index(index)
+    }
+    /// Merge the states by the disjoint set.
+    /// You should ensure that the disjoint set is generated from the same DFA.
+    /// In other words, the DFA should be re-indexed from 0 before merging.
+    pub fn merge_by(&self, m: DisjointSet) -> Self {
+        let dfa_json: DFAJson = self.into();
+        let dfa_json = dfa_json.merge_by(m);
+        Self::from(dfa_json)
+    }
     pub fn to_json(&self) -> String {
         let dfa_json: DFAJson = self.into();
         dfa_json.to_json()
@@ -156,6 +181,17 @@ impl DFA {
         };
         NFA::from(nfa_json)
     }
+    /// Simplify the DFA.
+    /// Returns the simplified DFA and the description of the simplification.
+    /// The description is a markdown string.
+    pub fn simplify(&self) -> (Self, String) {
+        let (size, dfa) = self.re_index(0);
+        unimplemented!(
+            "TODO: Simplify the DFA and generate the description. {} {}",
+            size,
+            dfa.to_json()
+        );
+    }
     pub fn test(&self, input: &str) -> bool {
         let mut state = self.start;
         for c in input.chars() {
@@ -190,7 +226,7 @@ impl<T: Borrow<DFA>> From<T> for DFAJson {
                 transitions.push((*from, *token, *to));
             }
         }
-        transitions.sort();
+        transitions.sort_unstable();
         Self {
             start: dfa.start,
             accept: dfa.accept.clone(),
@@ -215,16 +251,28 @@ mod test {
     }
 
     #[test]
-    fn test_fn_test() {
-        let dfa_json = DFAJson {
-            start: 0,
-            accept: [1].into(),
-            transitions: vec![(0, 'a', 1), (1, 'b', 0)],
-        };
-        let dfa = DFA::from(dfa_json);
-        assert_eq!(dfa.test("ab"), false);
-        assert_eq!(dfa.test("ba"), false);
-        assert_eq!(dfa.test("a"), true);
-        assert_eq!(dfa.test("aba"), true);
+    fn basic_test() {
+        let nfa = NFA::from_regex("a(b|c)*d").unwrap();
+        let (dfa, _) = nfa.to_dfa();
+        let nfa = dfa.to_nfa();
+        assert_eq!(nfa.test("ad"), true);
+        assert_eq!(nfa.test("abd"), true);
+        assert_eq!(nfa.test("acd"), true);
+        assert_eq!(nfa.test("abbd"), true);
+        assert_eq!(nfa.test("abccccbcd"), true);
+        assert_eq!(nfa.test("a"), false);
+        assert_eq!(nfa.test("aabcccd"), false);
+        assert_eq!(nfa.test("abccc"), false);
+        assert_eq!(nfa.test("_"), false);
+
+        assert_eq!(dfa.test("ad"), true);
+        assert_eq!(dfa.test("abd"), true);
+        assert_eq!(dfa.test("acd"), true);
+        assert_eq!(dfa.test("abbd"), true);
+        assert_eq!(dfa.test("abccccbcd"), true);
+        assert_eq!(dfa.test("a"), false);
+        assert_eq!(dfa.test("aabcccd"), false);
+        assert_eq!(dfa.test("abccc"), false);
+        assert_eq!(dfa.test("_"), false);
     }
 }

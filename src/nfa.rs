@@ -35,11 +35,21 @@ impl NFAJson {
     /// Returns the new size and the re-indexed NFA.
     pub fn re_index(&self, index: usize) -> (usize, Self) {
         let mut r = Numberer::from(index);
+        let mut states: Vec<_> = self
+            .transitions
+            .iter()
+            .flat_map(|(s, _, n)| [*s, *n])
+            .chain([self.start, self.accept])
+            .collect();
+        states.sort_unstable();
+        for state in states {
+            r.i(state);
+        }
         let start = r.i(self.start);
-        let mut transitions = self.transitions.clone();
-        transitions.sort();
-        let transitions: Vec<_> = transitions
-            .into_iter()
+        let transitions: Vec<_> = self
+            .transitions
+            .iter()
+            .cloned()
             .map(|(s, c, n)| (r.i(s), c, r.i(n)))
             .collect();
         let accept = r.i(self.accept);
@@ -357,49 +367,51 @@ impl NFA {
         fn set2s(set: impl Borrow<HashSet<usize>>) -> String {
             let mut sorted = set.borrow().iter().collect::<Vec<_>>();
             sorted.sort_unstable();
-            format!(
-                "{{ {} }}",
-                sorted
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
+            sorted
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         }
+        let (_, nfa) = self.re_index(0);
 
-        let mut state_sets = vec![self.epsilon_closure(HashSet::from([self.start]))];
+        let mut state_sets = vec![nfa.epsilon_closure(HashSet::from([nfa.start]))];
         let mut current = 0;
         let dfa_start = 0;
         let mut dfa_transitions = vec![];
         let mut markdown = "# NFA to DFA\n".to_string();
         markdown.push_str("\n## NFA\n");
-        markdown.push_str(&self.to_inline_mermaid());
+        markdown.push_str(&nfa.to_inline_mermaid());
         markdown.push_str("\n## Process\n");
-        markdown.push_str(&format!("\n- $T_0 = {}$\n", set2s(&state_sets[0])));
+        markdown.push_str(&format!(
+            "\n- $T_0 = \\{{ {} \\}}$\n",
+            set2s(&state_sets[0])
+        ));
         let mut r = Numberer::new();
         r.i(set2s(&state_sets[0]));
         let mut dfa_accept = HashSet::new();
         while current < state_sets.len() {
             let state_set = &state_sets[current];
-            current += 1;
-            if state_set.contains(&self.accept) {
+            if state_set.contains(&nfa.accept) {
                 dfa_accept.insert(current);
             }
             let mut transitions: HashMap<char, HashSet<usize>> = HashMap::new();
             for state in state_set {
-                for (c, next_set) in self.transitions.get(state).unwrap_or(&Transition::new()) {
+                for (c, next_set) in nfa.transitions.get(state).unwrap_or(&Transition::new()) {
                     if let Some(c) = c {
                         transitions
                             .entry(*c)
                             .or_insert_with(HashSet::new)
-                            .extend(self.epsilon_closure(next_set));
+                            .extend(nfa.epsilon_closure(next_set));
                     }
                 }
             }
-            for (c, next_set) in transitions {
+            let mut sorted_transitions = transitions.into_iter().collect::<Vec<_>>();
+            sorted_transitions.sort_unstable_by_key(|(c, _)| *c);
+            for (c, next_set) in sorted_transitions {
                 let next = r.i(set2s(&next_set));
                 markdown.push_str(&format!(
-                    "\n- $\\epsilon\\-closure(move(T_{{{}}}, {})) = {} = T_{{{}}}$\n",
+                    "\n- $\\epsilon \\text{{-}} closure(move(T_{{{}}}, {})) = \\{{{}\\}} = T_{{{}}}$\n",
                     current,
                     c,
                     set2s(&next_set),
@@ -410,6 +422,7 @@ impl NFA {
                     state_sets.push(next_set);
                 }
             }
+            current += 1;
         }
         let dfa_json = DFAJson {
             start: dfa_start,
@@ -417,7 +430,7 @@ impl NFA {
             transitions: dfa_transitions,
         };
         let dfa = DFA::from(dfa_json);
-        markdown.push_str("\n## Result\n");
+        markdown.push_str("\n## DFA\n");
         markdown.push_str(&dfa.to_inline_mermaid());
         (dfa, markdown)
     }
@@ -479,7 +492,7 @@ impl<T: Borrow<NFA>> From<T> for NFAJson {
                 }
             }
         }
-        transitions.sort();
+        transitions.sort_unstable();
         NFAJson {
             start: nfa.start,
             accept: nfa.accept,
