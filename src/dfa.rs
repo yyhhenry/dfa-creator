@@ -283,7 +283,7 @@ impl DFA {
                         .entry(None)
                         .or_insert_with(BTreeSet::new)
                         .insert(s);
-                    markdown.push_str(&format!("{} cannot go with {}", s, c));
+                    markdown.push_str(&format!("\n{} cannot go with {}\n", s, c));
                 }
             }
             groups.remove(g);
