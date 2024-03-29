@@ -5,7 +5,10 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::numberer::{DisjointSet, Numberer};
+use crate::{
+    dfa::{DFAJson, DFA},
+    numberer::{DisjointSet, Numberer},
+};
 #[derive(Error, Debug)]
 pub enum RegexSyntaxError {
     #[error("Unmatched Parentheses: {0}")]
@@ -79,6 +82,38 @@ impl NFAJson {
     }
     pub fn from_json(json: &str) -> Result<Self, FromJsonError> {
         serde_json::from_str(json).map_err(FromJsonError::SyntaxError)
+    }
+    pub fn to_mermaid(&self) -> String {
+        let mut result = "".to_string();
+        result.push_str("%%{ init: { 'theme': 'neutral' } }%%\n");
+        result.push_str("graph TD\n");
+        let (size, nfa) = self.re_index(0);
+        for state in 0..size {
+            let name = if state == nfa.start {
+                format!("S{}", state)
+            } else {
+                format!("{}", state)
+            };
+            let shape = if state == nfa.accept {
+                format!("((({})))", name)
+            } else {
+                format!("(({}))", name)
+            };
+            result.push_str(&format!("{}{}\n", state, shape));
+        }
+        for (state, c, next) in nfa.transitions {
+            let c = c.unwrap_or('ε');
+            result.push_str(&format!("{} --> |{}| {};\n", state, c, next));
+        }
+        result
+    }
+    pub fn to_inline_mermaid(&self) -> String {
+        let mermaid = self.to_mermaid();
+        format!("#\n```mermaid\n{}\n```\n", mermaid)
+    }
+    pub fn to_markdown(&self, title: &str, description: &str) -> String {
+        let mermaid = self.to_inline_mermaid();
+        format!("# {}\n\n{}\n\n{}", title, description, mermaid)
     }
 }
 
@@ -201,6 +236,9 @@ impl NFA {
     pub fn to_mermaid(&self) -> String {
         NFAJson::from(self).to_mermaid()
     }
+    pub fn to_inline_mermaid(&self) -> String {
+        NFAJson::from(self).to_inline_mermaid()
+    }
     pub fn to_markdown(&self, title: &str, description: &str) -> String {
         NFAJson::from(self).to_markdown(title, description)
     }
@@ -312,6 +350,77 @@ impl NFA {
         }
         result
     }
+    /// Convert the NFA to a DFA.
+    /// Use subset construction.
+    /// Returns the DFA and a Markdown string of the process.
+    pub fn to_dfa(&self) -> (DFA, String) {
+        fn set2s(set: impl Borrow<HashSet<usize>>) -> String {
+            let mut sorted = set.borrow().iter().collect::<Vec<_>>();
+            sorted.sort_unstable();
+            format!(
+                "{{ {} }}",
+                sorted
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+
+        let mut state_sets = vec![self.epsilon_closure(HashSet::from([self.start]))];
+        let mut current = 0;
+        let dfa_start = 0;
+        let mut dfa_transitions = vec![];
+        let mut markdown = "# NFA to DFA\n".to_string();
+        markdown.push_str("\n## NFA\n");
+        markdown.push_str(&self.to_inline_mermaid());
+        markdown.push_str("\n## Process\n");
+        markdown.push_str(&format!("\n- $T_0 = {}$\n", set2s(&state_sets[0])));
+        let mut r = Numberer::new();
+        r.i(set2s(&state_sets[0]));
+        let mut dfa_accept = HashSet::new();
+        while current < state_sets.len() {
+            let state_set = &state_sets[current];
+            current += 1;
+            if state_set.contains(&self.accept) {
+                dfa_accept.insert(current);
+            }
+            let mut transitions: HashMap<char, HashSet<usize>> = HashMap::new();
+            for state in state_set {
+                for (c, next_set) in self.transitions.get(state).unwrap_or(&Transition::new()) {
+                    if let Some(c) = c {
+                        transitions
+                            .entry(*c)
+                            .or_insert_with(HashSet::new)
+                            .extend(self.epsilon_closure(next_set));
+                    }
+                }
+            }
+            for (c, next_set) in transitions {
+                let next = r.i(set2s(&next_set));
+                markdown.push_str(&format!(
+                    "\n- $\\epsilon\\-closure(move(T_{{{}}}, {})) = {} = T_{{{}}}$\n",
+                    current,
+                    c,
+                    set2s(&next_set),
+                    next
+                ));
+                dfa_transitions.push((current, c, next));
+                if next == state_sets.len() {
+                    state_sets.push(next_set);
+                }
+            }
+        }
+        let dfa_json = DFAJson {
+            start: dfa_start,
+            accept: dfa_accept,
+            transitions: dfa_transitions,
+        };
+        let dfa = DFA::from(dfa_json);
+        markdown.push_str("\n## Result\n");
+        markdown.push_str(&dfa.to_inline_mermaid());
+        (dfa, markdown)
+    }
     pub fn test(&self, s: &str) -> bool {
         let mut current = self.epsilon_closure(HashSet::from([self.start]));
         for c in s.chars() {
@@ -376,39 +485,6 @@ impl<T: Borrow<NFA>> From<T> for NFAJson {
             accept: nfa.accept,
             transitions,
         }
-    }
-}
-impl NFAJson {
-    pub fn to_mermaid(&self) -> String {
-        let mut result = "".to_string();
-        result.push_str("%%{ init: { 'theme': 'neutral' } }%%\n");
-        result.push_str("graph TD\n");
-        let (size, nfa) = self.re_index(0);
-        for state in 0..size {
-            let name = if state == nfa.start {
-                format!("S{}", state)
-            } else {
-                format!("{}", state)
-            };
-            let shape = if state == nfa.accept {
-                format!("((({})))", name)
-            } else {
-                format!("(({}))", name)
-            };
-            result.push_str(&format!("{}{}\n", state, shape));
-        }
-        for (state, c, next) in nfa.transitions {
-            let c = c.unwrap_or('ε');
-            result.push_str(&format!("{} --> |{}| {};\n", state, c, next));
-        }
-        result
-    }
-    pub fn to_markdown(&self, title: &str, description: &str) -> String {
-        let mermaid = self.to_mermaid();
-        format!(
-            "# {}\n\n{}\n\n```mermaid\n{}\n```\n",
-            title, description, mermaid
-        )
     }
 }
 
