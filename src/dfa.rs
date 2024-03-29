@@ -70,6 +70,37 @@ impl DFAJson {
     pub fn from_json(json: &str) -> Result<Self, FromJsonError> {
         serde_json::from_str(json).map_err(FromJsonError::SyntaxError)
     }
+    pub fn to_mermaid(&self) -> String {
+        let mut result = "".to_string();
+        result.push_str("%%{ init: { 'theme': 'neutral' } }%%\n");
+        result.push_str("graph TD\n");
+        let (size, dfa) = self.re_index(0);
+        for state in 0..size {
+            let name = if state == dfa.start {
+                format!("S{}", state)
+            } else {
+                format!("{}", state)
+            };
+            let shape = if dfa.accept.contains(&state) {
+                format!("((({})))", name)
+            } else {
+                format!("(({}))", name)
+            };
+            result.push_str(&format!("{}{}\n", state, shape));
+        }
+        for (state, c, next) in dfa.transitions {
+            result.push_str(&format!("{} --> |{}| {};\n", state, c, next));
+        }
+        result
+    }
+    pub fn to_inline_mermaid(&self) -> String {
+        let mermaid = self.to_mermaid();
+        format!("#\n```mermaid\n{}\n```\n", mermaid)
+    }
+    pub fn to_markdown(&self, title: &str, description: &str) -> String {
+        let mermaid = self.to_inline_mermaid();
+        format!("# {}\n\n{}\n\n{}", title, description, mermaid)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -90,6 +121,18 @@ impl DFA {
     pub fn from_json(json: &str) -> Result<Self, FromJsonError> {
         let dfa_json = DFAJson::from_json(json)?;
         Ok(Self::from(dfa_json))
+    }
+    pub fn to_mermaid(&self) -> String {
+        let dfa_json: DFAJson = self.into();
+        dfa_json.to_mermaid()
+    }
+    pub fn to_inline_mermaid(&self) -> String {
+        let dfa_json: DFAJson = self.into();
+        dfa_json.to_inline_mermaid()
+    }
+    pub fn to_markdown(&self, title: &str, description: &str) -> String {
+        let dfa_json: DFAJson = self.into();
+        dfa_json.to_markdown(title, description)
     }
     fn add(&mut self, state: usize, token: Token, to: usize) {
         self.transitions
