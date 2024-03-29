@@ -411,7 +411,7 @@ impl NFA {
             for (c, next_set) in sorted_transitions {
                 let next = r.i(set2s(&next_set));
                 markdown.push_str(&format!(
-                    "\n- $\\epsilon \\text{{-}} closure(move(T_{{{}}}, {})) = \\{{{}\\}} = T_{{{}}}$\n",
+                    "\n- $\\varepsilon \\text{{-}} closure(move(T_{{{}}}, {})) = \\{{{}\\}} = T_{{{}}}$\n",
                     current,
                     c,
                     set2s(&next_set),
