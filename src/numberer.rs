@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    borrow::Borrow,
+    collections::{HashMap, HashSet},
+};
 
 #[derive(Debug, Clone)]
 pub struct Numberer<T>
@@ -82,4 +85,14 @@ impl DisjointSet {
         let mut r = Numberer::new();
         (0..self.len()).map(|i| (i, r.i(self.find(i)))).collect()
     }
+}
+
+pub fn set2s(set: impl Borrow<HashSet<usize>>) -> String {
+    let mut sorted = set.borrow().iter().collect::<Vec<_>>();
+    sorted.sort_unstable();
+    sorted
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
 }

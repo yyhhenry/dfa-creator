@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::{
     dfa::{DFAJson, DFA},
-    numberer::{DisjointSet, Numberer},
+    numberer::{set2s, DisjointSet, Numberer},
 };
 #[derive(Error, Debug)]
 pub enum RegexSyntaxError {
@@ -364,15 +364,6 @@ impl NFA {
     /// Use subset construction.
     /// Returns the DFA and a Markdown string of the process.
     pub fn to_dfa(&self) -> (DFA, String) {
-        fn set2s(set: impl Borrow<HashSet<usize>>) -> String {
-            let mut sorted = set.borrow().iter().collect::<Vec<_>>();
-            sorted.sort_unstable();
-            sorted
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        }
         let (_, nfa) = self.re_index(0);
 
         let mut state_sets = vec![nfa.epsilon_closure(HashSet::from([nfa.start]))];
