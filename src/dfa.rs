@@ -127,9 +127,10 @@ pub struct DFA {
 impl DFA {
     /// Re-index the DFA to start from `index`.
     /// Returns the new size of the DFA and the re-indexed DFA.
-    pub fn re_index(&self, index: usize) -> (usize, DFAJson) {
+    pub fn re_index(&self, index: usize) -> (usize, DFA) {
         let dfa_json: DFAJson = self.into();
-        dfa_json.re_index(index)
+        let (size, dfa_json) = dfa_json.re_index(index);
+        (size, Self::from(dfa_json))
     }
     /// Merge the states by the disjoint set.
     /// You should ensure that the disjoint set is generated from the same DFA.
@@ -181,17 +182,23 @@ impl DFA {
         };
         NFA::from(nfa_json)
     }
-    /// Simplify the DFA.
-    /// Returns the simplified DFA and the description of the simplification.
+    /// Minimize the DFA.
+    /// Returns the minimized DFA and the description of the minimization process.
     /// The description is a markdown string.
-    pub fn simplify(&self) -> (Self, String) {
-        let (size, dfa) = self.re_index(0);
-        unimplemented!(
-            "TODO: Simplify the DFA and generate the description. {} {}",
-            size,
-            dfa.to_json()
-        );
-    }
+    /// You should make sure there is no unreachable states in the DFA.
+    // pub fn minimize(&self) -> (Self, String) {
+    //     let (size, dfa) = self.re_index(0);
+    //     let mut group = (0..size)
+    //         .map(|i| dfa.accept.contains(&i) as usize)
+    //         .collect::<Vec<_>>();
+    //     loop {
+    //         unimplemented!(
+    //             "TODO: Simplify the DFA and generate the description. {} {}",
+    //             size,
+    //             dfa.to_json()
+    //         );
+    //     }
+    // }
     pub fn test(&self, input: &str) -> bool {
         let mut state = self.start;
         for c in input.chars() {
