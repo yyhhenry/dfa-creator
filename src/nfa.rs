@@ -109,11 +109,11 @@ impl NFAJson {
     }
     pub fn to_inline_mermaid(&self) -> String {
         let mermaid = self.to_mermaid();
-        format!("#\n```mermaid\n{}\n```\n", mermaid)
+        format!("\n```mermaid\n{}\n```\n", mermaid)
     }
     pub fn to_markdown(&self, title: &str, description: &str) -> String {
         let mermaid = self.to_inline_mermaid();
-        format!("# {}\n\n{}\n\n{}", title, description, mermaid)
+        format!("# {}\n\n{}\n{}", title, description, mermaid)
     }
 }
 
