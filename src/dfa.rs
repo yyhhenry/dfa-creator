@@ -5,7 +5,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Borrow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
 };
 use thiserror::Error;
 
@@ -16,12 +16,12 @@ pub enum FromJsonError {
 }
 
 type Token = char;
-type Transition = HashMap<Token, usize>;
+type Transition = BTreeMap<Token, usize>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DFAJson {
     pub start: usize,
-    pub accept: HashSet<usize>,
+    pub accept: BTreeSet<usize>,
     pub transitions: Vec<(usize, Token, usize)>,
 }
 impl DFAJson {
@@ -119,10 +119,10 @@ pub struct DFA {
     /// The start state of the DFA.
     start: usize,
     /// The set of accept states in the DFA.
-    accept: HashSet<usize>,
+    accept: BTreeSet<usize>,
     /// The transition function of the DFA.
     /// state -> (token -> state)
-    transitions: HashMap<usize, Transition>,
+    transitions: BTreeMap<usize, Transition>,
 }
 impl DFA {
     /// Re-index the DFA to start from `index`.
@@ -163,7 +163,7 @@ impl DFA {
     fn add(&mut self, state: usize, token: Token, to: usize) {
         self.transitions
             .entry(state)
-            .or_insert_with(HashMap::new)
+            .or_insert_with(BTreeMap::new)
             .insert(token, to);
     }
     pub fn to_nfa(&self) -> NFA {
@@ -188,16 +188,104 @@ impl DFA {
     /// You should make sure there is no unreachable states in the DFA.
     // pub fn minimize(&self) -> (Self, String) {
     //     let (size, dfa) = self.re_index(0);
-    //     let mut group = (0..size)
-    //         .map(|i| dfa.accept.contains(&i) as usize)
-    //         .collect::<Vec<_>>();
-    //     loop {
-    //         unimplemented!(
-    //             "TODO: Simplify the DFA and generate the description. {} {}",
-    //             size,
-    //             dfa.to_json()
-    //         );
+    //     let transitions = DFAJson::from(&dfa).transitions;
+    //     let mut markdown = "# Minimization of DFA\n".to_string();
+    //     markdown.push_str("\n## Initial DFA\n");
+    //     markdown.push_str(&dfa.to_inline_mermaid());
+
+    //     let mut groups = vec![BTreeSet::new(), BTreeSet::new()];
+    //     for i in 0..size {
+    //         let group = dfa.accept.contains(&i) as usize;
+    //         groups[group].insert(i);
     //     }
+    //     fn get_groups_of(groups: &Vec<BTreeSet<usize>>) -> BTreeMap<usize, usize> {
+    //         groups
+    //             .iter()
+    //             .enumerate()
+    //             .flat_map(|(i, group)| group.iter().map(move |&s| (s, i)))
+    //             .collect()
+    //     }
+    //     /// Find the (g, c) that group g can be divided by token c.
+    //     fn find_break_point(dfa: &DFA, groups: &Vec<BTreeSet<usize>>) -> Option<(usize, Token)> {
+    //         let group_of = get_groups_of(groups);
+    //         fn find_group_break_point(
+    //             dfa: &DFA,
+    //             group: &BTreeSet<usize>,
+    //             group_of: &BTreeMap<usize, usize>,
+    //         ) -> Option<Token> {
+    //             let mut next_c = BTreeSet::new();
+    //             for &s in group {
+    //                 if let Some(transition) = dfa.transitions.get(&s) {
+    //                     for c in transition.keys() {
+    //                         next_c.insert(*c);
+    //                     }
+    //                 }
+    //             }
+    //             for c in next_c {
+    //                 let mut next_group = BTreeMap::new();
+    //                 for &s in group {
+    //                     let to = dfa
+    //                         .transitions
+    //                         .get(&s)
+    //                         .and_then(|t| t.get(&c))
+    //                         .map(|&to| group_of[&to]);
+    //                     next_group.entry(to).or_insert_with(BTreeSet::new).insert(s);
+    //                 }
+    //                 if next_group.len() > 1 {
+    //                     return Some(c);
+    //                 }
+    //             }
+    //             None
+    //         }
+    //         for (g, group) in groups.iter().enumerate() {
+    //             if let Some(c) = find_group_break_point(dfa, group, &group_of) {
+    //                 return Some((g, c));
+    //             }
+    //         }
+    //         None
+    //     }
+    //     fn groups2s(index: &mut usize, groups: &Vec<BTreeSet<usize>>) -> String {
+    //         let groups: Vec<_> = groups
+    //             .iter()
+    //             .map(|g| format!("\\{{ {} \\}}", set2s(g)))
+    //             .collect();
+    //         let i = *index;
+    //         *index += 1;
+    //         format!("\n$ P_{{{}}} = ({}) $\n", i, groups.join(""))
+    //     }
+    //     markdown.push_str("\n## Minimization Process\n");
+    //     let mut index = 0;
+    //     markdown.push_str(&groups2s(&mut index, &groups));
+    //     while let Some((g, c)) = find_break_point(&dfa, &groups) {
+    //         markdown.push_str(&format!(
+    //             "\n$\\{{{}\\}}$ can be divided by {}\n",
+    //             set2s(&groups[g]),
+    //             c
+    //         ));
+    //         let group_of = get_groups_of(&groups);
+    //         let mut new_groups = vec![BTreeSet::<usize>::new(); groups.len() + 1];
+    //         for &s in &groups[g] {
+    //             let next = dfa.transitions.get(&s).and_then(|t| t.get(&c).cloned());
+    //             if let Some(next) = next {
+    //                 let next_g = group_of[&next];
+    //                 markdown.push_str(&format!(
+    //                     "{} with {} goes to {} in $\\{{ {} \\}}$",
+    //                     s,
+    //                     c,
+    //                     next,
+    //                     set2s(&groups[next_g])
+    //                 ));
+    //             } else {
+    //                 markdown.push_str(&format!("{} cannot go with {}", s, c));
+    //             }
+    //         }
+    //         unimplemented!()
+    //     }
+    //     unimplemented!(
+    //         "TODO: Simplify the DFA and generate the description. {} {}",
+    //         size,
+    //         dfa.to_json()
+    //     );
     // }
     pub fn test(&self, input: &str) -> bool {
         let mut state = self.start;
@@ -216,7 +304,7 @@ impl<T: Borrow<DFAJson>> From<T> for DFA {
         let mut dfa = Self {
             start: json.start,
             accept: json.accept.clone(),
-            transitions: HashMap::new(),
+            transitions: BTreeMap::new(),
         };
         for (from, token, to) in json.transitions.iter() {
             dfa.add(*from, *token, *to);
@@ -261,25 +349,27 @@ mod test {
     fn basic_test() {
         let nfa = NFA::from_regex("a(b|c)*d").unwrap();
         let (dfa, _) = nfa.to_dfa();
-        let nfa = dfa.to_nfa();
-        assert_eq!(nfa.test("ad"), true);
-        assert_eq!(nfa.test("abd"), true);
-        assert_eq!(nfa.test("acd"), true);
-        assert_eq!(nfa.test("abbd"), true);
-        assert_eq!(nfa.test("abccccbcd"), true);
-        assert_eq!(nfa.test("a"), false);
-        assert_eq!(nfa.test("aabcccd"), false);
-        assert_eq!(nfa.test("abccc"), false);
-        assert_eq!(nfa.test("_"), false);
-
-        assert_eq!(dfa.test("ad"), true);
-        assert_eq!(dfa.test("abd"), true);
-        assert_eq!(dfa.test("acd"), true);
-        assert_eq!(dfa.test("abbd"), true);
-        assert_eq!(dfa.test("abccccbcd"), true);
-        assert_eq!(dfa.test("a"), false);
-        assert_eq!(dfa.test("aabcccd"), false);
-        assert_eq!(dfa.test("abccc"), false);
-        assert_eq!(dfa.test("_"), false);
+        let nfa_1 = dfa.to_nfa();
+        // let dfa_1 = dfa.minimize().0;
+        let test_all = |s: &str| {
+            let ans = nfa.test(s);
+            assert_eq!(dfa.test(s), ans);
+            assert_eq!(nfa_1.test(s), ans);
+            // assert_eq!(dfa_1.test(s), ans);
+        };
+        let tests = [
+            "ad",
+            "abd",
+            "acd",
+            "abbd",
+            "abccccbcd",
+            "a",
+            "aabcccd",
+            "abccc",
+            "_",
+        ];
+        for s in tests {
+            test_all(s);
+        }
     }
 }

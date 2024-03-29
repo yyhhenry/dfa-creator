@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Borrow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
 };
 use thiserror::Error;
 
@@ -22,7 +22,7 @@ pub enum FromJsonError {
     SyntaxError(#[from] serde_json::error::Error),
 }
 type Token = Option<char>;
-type Transition = HashMap<Token, HashSet<usize>>;
+type Transition = BTreeMap<Token, BTreeSet<usize>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NFAJson {
@@ -137,7 +137,7 @@ pub struct NFA {
     /// Transitions of the NFA.
     /// state -> (character -> states)
     /// The key None represents epsilon transitions.
-    transitions: HashMap<usize, Transition>,
+    transitions: BTreeMap<usize, Transition>,
 }
 impl NFA {
     /// Re-index the states of the NFA.
@@ -180,7 +180,7 @@ impl NFA {
             .entry(state)
             .or_insert_with(Transition::new)
             .entry(c)
-            .or_insert_with(HashSet::new)
+            .or_insert_with(BTreeSet::new)
             .insert(next);
     }
     pub fn or(&self, rhs: &Self) -> NFA {
@@ -343,8 +343,8 @@ impl NFA {
         let result = Self::or_all(&result);
         Ok(result)
     }
-    pub fn epsilon_closure(&self, state: impl Borrow<HashSet<usize>>) -> HashSet<usize> {
-        let state: &HashSet<_> = state.borrow();
+    pub fn epsilon_closure(&self, state: impl Borrow<BTreeSet<usize>>) -> BTreeSet<usize> {
+        let state: &BTreeSet<_> = state.borrow();
         let mut result = state.clone();
         let mut stack = state.iter().cloned().collect::<Vec<_>>();
         while let Some(state) = stack.pop() {
@@ -366,7 +366,7 @@ impl NFA {
     pub fn to_dfa(&self) -> (DFA, String) {
         let (_, nfa) = self.re_index(0);
 
-        let mut state_sets = vec![nfa.epsilon_closure(HashSet::from([nfa.start]))];
+        let mut state_sets = vec![nfa.epsilon_closure(BTreeSet::from([nfa.start]))];
         let mut current = 0;
         let dfa_start = 0;
         let mut dfa_transitions = vec![];
@@ -380,19 +380,19 @@ impl NFA {
         ));
         let mut r = Numberer::new();
         r.i(set2s(&state_sets[0]));
-        let mut dfa_accept = HashSet::new();
+        let mut dfa_accept = BTreeSet::new();
         while current < state_sets.len() {
             let state_set = &state_sets[current];
             if state_set.contains(&nfa.accept) {
                 dfa_accept.insert(current);
             }
-            let mut transitions: HashMap<char, HashSet<usize>> = HashMap::new();
+            let mut transitions: BTreeMap<char, BTreeSet<usize>> = BTreeMap::new();
             for state in state_set {
                 for (c, next_set) in nfa.transitions.get(state).unwrap_or(&Transition::new()) {
                     if let Some(c) = c {
                         transitions
                             .entry(*c)
-                            .or_insert_with(HashSet::new)
+                            .or_insert_with(BTreeSet::new)
                             .extend(nfa.epsilon_closure(next_set));
                     }
                 }
@@ -426,9 +426,9 @@ impl NFA {
         (dfa, markdown)
     }
     pub fn test(&self, s: &str) -> bool {
-        let mut current = self.epsilon_closure(HashSet::from([self.start]));
+        let mut current = self.epsilon_closure(BTreeSet::from([self.start]));
         for c in s.chars() {
-            let mut next = HashSet::new();
+            let mut next = BTreeSet::new();
             for state in current {
                 if let Some(set) = self.transitions.get(&state) {
                     if let Some(next_set) = set.get(&Some(c)) {

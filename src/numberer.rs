@@ -1,24 +1,24 @@
 use std::{
     borrow::Borrow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
 };
 
 #[derive(Debug, Clone)]
 pub struct Numberer<T>
 where
-    T: Clone + Eq + std::hash::Hash,
+    T: Clone + Ord,
 {
     index: usize,
-    map: HashMap<T, usize>,
+    map: BTreeMap<T, usize>,
 }
 impl<T> Numberer<T>
 where
-    T: Clone + Eq + std::hash::Hash,
+    T: Clone + Ord,
 {
     pub fn new() -> Self {
         Self {
             index: 0,
-            map: HashMap::new(),
+            map: BTreeMap::new(),
         }
     }
     pub fn len(&self) -> usize {
@@ -40,12 +40,12 @@ where
 }
 impl<T> From<usize> for Numberer<T>
 where
-    T: Clone + Eq + std::hash::Hash,
+    T: Clone + Ord,
 {
     fn from(index: usize) -> Self {
         Self {
             index,
-            map: HashMap::new(),
+            map: BTreeMap::new(),
         }
     }
 }
@@ -81,13 +81,13 @@ impl DisjointSet {
     }
     /// Returns a map from the original index to the new index.
     /// The new index is indexed from 0.
-    pub fn to_map(mut self) -> HashMap<usize, usize> {
+    pub fn to_map(mut self) -> BTreeMap<usize, usize> {
         let mut r = Numberer::new();
         (0..self.len()).map(|i| (i, r.i(self.find(i)))).collect()
     }
 }
 
-pub fn set2s(set: impl Borrow<HashSet<usize>>) -> String {
+pub fn set2s(set: impl Borrow<BTreeSet<usize>>) -> String {
     let mut sorted = set.borrow().iter().collect::<Vec<_>>();
     sorted.sort_unstable();
     sorted
