@@ -6,6 +6,7 @@ use utils::{
     nfa2dfa::{nfa2dfa, N2DArgs},
     reg2nfa::{reg2nfa, R2NArgs},
     run::{run, RunArgs},
+    show::{show, ShowArgs},
 };
 #[derive(Subcommand)]
 enum Commands {
@@ -21,6 +22,9 @@ enum Commands {
     /// Run a DFA or an NFA
     #[clap(name = "run")]
     Run(RunArgs),
+    /// Show a DFA or an NFA as markdown
+    #[clap(name = "show")]
+    Show(ShowArgs),
 }
 
 #[derive(Parser)]
@@ -43,6 +47,9 @@ fn main() -> Result<()> {
         }
         Commands::Run(args) => {
             run(args)?;
+        }
+        Commands::Show(args) => {
+            show(args)?;
         }
     }
     Ok(())
