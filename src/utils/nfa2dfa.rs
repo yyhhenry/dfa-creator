@@ -3,7 +3,7 @@ use clap::Parser;
 use dfa_creator::nfa;
 
 #[derive(Parser)]
-struct Args {
+pub struct N2DArgs {
     /// Input NFA file
     /// Supported formats: json.
     input: String,
@@ -15,8 +15,7 @@ struct Args {
     output: String,
 }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
+pub fn nfa2dfa(args: N2DArgs) -> Result<()> {
     let input = std::path::Path::new(&args.input).with_extension("json");
     if !input.exists() {
         return Err(anyhow!("Input file does not exist"));

@@ -272,7 +272,7 @@ impl DFA {
                         .or_insert_with(BTreeSet::new)
                         .insert(s);
                     markdown.push_str(&format!(
-                        "{} with {} goes to {} in $\\{{ {} \\}}$",
+                        "\n{} with {} goes to {} in $\\{{ {} \\}}$\n",
                         s,
                         c,
                         next,
@@ -365,12 +365,12 @@ mod test {
         let nfa = NFA::from_regex("a(b|c)*d").unwrap();
         let (dfa, _) = nfa.to_dfa();
         let nfa_1 = dfa.to_nfa();
-        // let dfa_1 = dfa.minimize().0;
+        let dfa_1 = dfa.minimize().0;
         let test_all = |s: &str| {
             let ans = nfa.test(s);
             assert_eq!(dfa.test(s), ans);
             assert_eq!(nfa_1.test(s), ans);
-            // assert_eq!(dfa_1.test(s), ans);
+            assert_eq!(dfa_1.test(s), ans);
         };
         let tests = [
             "ad",

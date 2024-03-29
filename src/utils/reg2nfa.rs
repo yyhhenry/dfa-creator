@@ -3,7 +3,7 @@ use clap::Parser;
 use dfa_creator::nfa;
 
 #[derive(Parser)]
-struct Args {
+pub struct R2NArgs {
     /// Regular expression.
     /// Supported operators: `*`, `|`, `()`.
     regex: String,
@@ -14,8 +14,7 @@ struct Args {
     output: Option<String>,
 }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
+pub fn reg2nfa(args: R2NArgs) -> Result<()> {
     let nfa = nfa::NFA::from_regex(&args.regex)?;
     if let Some(output) = args.output {
         let path = std::path::Path::new(&output);
