@@ -387,12 +387,10 @@ mod test {
         let nfa = NFA::from_regex("a(b|c)*d").unwrap();
         let (dfa, _) = nfa.to_dfa();
         let nfa_1 = dfa.to_nfa();
-        let dfa_1 = dfa.minimize().0;
         let test_all = |s: &str| {
             let ans = nfa.test(s);
             assert_eq!(dfa.test(s), ans);
             assert_eq!(nfa_1.test(s), ans);
-            assert_eq!(dfa_1.test(s), ans);
         };
         let tests = [
             "ad",
@@ -408,5 +406,55 @@ mod test {
         for s in tests {
             test_all(s);
         }
+    }
+
+    #[test]
+    fn remove_unreachable_test() {
+        let dfa_json = DFAJson {
+            start: 0,
+            accept: [1, 2].into(),
+            transitions: vec![(0, 'a', 1), (0, 'b', 1), (2, 'a', 1)],
+        };
+        let dfa = DFA::from(&dfa_json).remove_unreachable();
+        let result_json = DFAJson {
+            start: 0,
+            accept: [1].into(),
+            transitions: vec![(0, 'a', 1), (0, 'b', 1)],
+        };
+        assert_eq!(dfa.to_json(), result_json.to_json());
+    }
+
+    #[test]
+    fn minimize_test() {
+        let dfa_json = DFAJson {
+            start: 0,
+            accept: [5].into(),
+            transitions: vec![
+                (0, 'a', 1),
+                (0, 'b', 2),
+                (1, 'a', 3),
+                (1, 'b', 4),
+                (2, 'a', 4),
+                (2, 'b', 3),
+                (3, 'a', 5),
+                (3, 'b', 5),
+                (4, 'a', 5),
+                (4, 'b', 5),
+            ],
+        };
+        let dfa = DFA::from(&dfa_json).minimize().0;
+        let result_json = DFAJson {
+            start: 0,
+            accept: [3].into(),
+            transitions: vec![
+                (0, 'a', 1),
+                (0, 'b', 1),
+                (1, 'a', 2),
+                (1, 'b', 2),
+                (2, 'a', 3),
+                (2, 'b', 3),
+            ],
+        };
+        assert_eq!(dfa.to_json(), result_json.to_json());
     }
 }
