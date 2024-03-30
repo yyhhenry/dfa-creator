@@ -8,7 +8,7 @@ Tool for creating NFA and DFA.
 
 ```bash
 # Build dfac (or download from releases)
-cargo b -r -F bin-deps
+cargo b -r -F dfac
 cp ./target/release/dfac . # or dfac.exe for Windows
 
 # Show help
