@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
@@ -29,7 +29,15 @@ jobs:
 
       - name: Rename binary for Windows
         if: runner.os == 'Windows'
-        run: Rename-Item target/release/dfa-creator.exe target/release/dfa-creator-${{ github.ref_name }}-windows.exe
+        run: |
+          $exePath = "target/release/dfa-creator.exe"
+          $newExePath = "target/release/dfa-creator-${{ github.ref_name }}-windows.exe"
+          if (Test-Path $exePath) {
+            Rename-Item -Path $exePath -NewName $newExePath
+          } else {
+            Write-Error "The file $exePath does not exist."
+          }
+        shell: pwsh
 
       - name: Rename binary for Linux
         if: runner.os == 'Linux'
