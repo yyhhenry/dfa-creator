@@ -29,10 +29,18 @@ jobs:
         run: mv target/release/dfa-creator target/release/dfa-creator-${{ github.ref_name }}-linux
 
       - name: Upload Release Asset
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: dfa-creator-${{ github.ref_name }}-${{ matrix.os }}
-          path: target/release/dfa-creator*
+          name: dfa-creator-${{ github.ref_name }}-windows
+          path: target/release/dfa-creator-${{ github.ref_name }}-windows.exe
+
+      - name: Upload Release Asset
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dfa-creator-${{ github.ref_name }}-linux
+          path: target/release/dfa-creator-${{ github.ref_name }}-linux
 
   release:
     needs: build
@@ -47,6 +55,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dfa-creator-*
+          files: |
+            dfa-creator-${{ github.ref_name }}-windows
+            dfa-creator-${{ github.ref_name }}-linux
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
