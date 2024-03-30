@@ -55,9 +55,10 @@ jobs:
           wasm-pack build
 
       - name: Publish WASM
-        run: wasm-pack publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
+        uses: JS-DevTools/npm-publish@v3
+        with:
+          token: ${{ secrets.NPMJS_TOKEN }}
+          package: "pkg/package.json"
 
   release:
     needs: build
