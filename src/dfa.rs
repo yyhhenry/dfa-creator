@@ -76,7 +76,7 @@ impl DFAJson {
         }
     }
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).unwrap()
+        serde_json::to_string(self).unwrap()
     }
     pub fn from_json(json: &str) -> Result<Self, FromJsonError> {
         serde_json::from_str(json).map_err(FromJsonError::SyntaxError)
