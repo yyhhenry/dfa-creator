@@ -1,8 +1,11 @@
 [package]
 default-run = "dfac"
+description = "A tool to create and minimize NFAs and DFAs from regex."
 edition = "2021"
+keywords = ["dfa", "nfa", "regex", "rust", "typescript", "mermaid"]
+license = "MIT"
 name = "dfa-creator"
-version = "0.1.2"
+version = "0.1.3"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
