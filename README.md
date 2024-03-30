@@ -4,25 +4,34 @@
 
 Tool for creating NFA and DFA.
 
-## Usage
+## Usage for executable
 
 ```bash
+# Build dfac (or download from releases)
+cargo b -r -F bin-deps
+cp ./target/release/dfac . # or dfac.exe for Windows
+
+# Show help
+./dfac -h
+./dfac r2n -h
+# ...
+
 # Regex to NFA Markdown
-cargo r -r -- r2n "(a|b)*aab" -o tmp/r2n
+./dfac r2n "(a|b)*aab" -o tmp/r2n
 # Regex to NFA JSON
-cargo r -r -- r2n "(a|b)*aab" -o tmp/nfa.json
+./dfac r2n "(a|b)*aab" -o tmp/nfa.json
 # Test NFA JSON
-cargo r -r -- run "baaab" -i tmp/nfa -n
+./dfac run "baaab" -i tmp/nfa -n
 # NFA JSON to DFA Markdown
-cargo r -r -- n2d tmp/nfa -o tmp/n2d
+./dfac n2d tmp/nfa -o tmp/n2d
 # NFA JSON to DFA JSON
-cargo r -r -- n2d tmp/nfa -o tmp/n2d.json
+./dfac n2d tmp/nfa -o tmp/n2d.json
 # Minimize DFA
-cargo r -r -- min tmp/n2d -o tmp/dfa
+./dfac min tmp/n2d -o tmp/dfa
 # Minimize DFA to JSON
-cargo r -r -- min tmp/n2d -o tmp/dfa.json
+./dfac min tmp/n2d -o tmp/dfa.json
 # Test DFA JSON
-cargo r -r -- run "baaab" -i tmp/dfa
+./dfac run "baaab" -i tmp/dfa
 # Show DFA JSON as Markdown
-cargo r -r -- show tmp/dfa -o tmp/show
+./dfac show tmp/dfa -o tmp/show
 ```
