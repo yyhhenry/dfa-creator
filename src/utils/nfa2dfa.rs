@@ -4,12 +4,9 @@ use dfa_creator::nfa;
 
 #[derive(Parser)]
 pub struct N2DArgs {
-    /// Input NFA file
-    /// Supported formats: json.
+    /// Input NFA file *.json.
     input: String,
-    /// Output file
-    /// `md` for markdown about the conversion.
-    /// `json` for the DFA.
+    /// Output file.
     /// Supported formats: md, json.
     #[clap(short, long)]
     output: String,

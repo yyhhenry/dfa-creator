@@ -4,13 +4,12 @@ use dfa_creator::{dfa, nfa};
 
 #[derive(Parser)]
 pub struct RunArgs {
-    /// The string to match
+    /// The string to match.
     string: String,
-    /// Input file
-    /// Supported formats: json.
+    /// Input file. *.json.
     #[clap(short, long)]
     input: String,
-    /// Enable DFA mode (default is NFA mode)
+    /// Enable DFA mode (NFA mode by default).
     #[clap(short, long)]
     nfa: bool,
 }
