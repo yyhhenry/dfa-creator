@@ -1,46 +1,58 @@
+name: Release
+
 on:
   push:
     tags:
-      - "v*"
-
-name: Release
+      - "v*.*.*"
 
 jobs:
-  build-linux:
-    name: Upload Linux Release
+  build:
+    name: Build and Release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Build Release
+        run: cargo build --release
+
+      - name: Rename binary for Windows
+        if: runner.os == 'Windows'
+        run: Rename-Item target/release/dfa-creator.exe target/release/dfa-creator-${{ github.ref_name }}-windows.exe
+
+      - name: Rename binary for Linux
+        if: runner.os == 'Linux'
+        run: mv target/release/dfa-creator target/release/dfa-creator-${{ github.ref_name }}-linux
+
+      - name: Upload Release Asset
+        uses: actions/upload-artifact@v2
+        with:
+          name: dfa-creator-${{ github.ref_name }}-${{ matrix.os }}
+          path: target/release/dfa-creator*
+
+  release:
+    needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@master
-      - name: Set Up Rust
-        uses: actions-rs/toolchain@v1
+      - name: Download Artifacts
+        uses: actions/download-artifact@v2
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - name: Build project
-        run: cargo build --release
-      - uses: ncipollo/release-action@v1
-        with:
-          artifacts: "target/release/dfa-creator"
-          bodyFile: "README.md"
-          token: ${{ secrets.GITHUB_TOKEN }}
-  build-windows:
-    name: Upload Windows Release
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@master
-      - name: Set Up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - name: Build project
-        run: cargo build --release --target x86_64-pc-windows-msvc
-      - uses: ncipollo/release-action@v1
-        with:
-          artifacts: "target/release/dfa-creator.exe"
-          bodyFile: "README.md"
-          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            dfa-creator-v*-*-linux
+            dfa-creator-v*-*-windows.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
