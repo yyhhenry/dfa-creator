@@ -182,12 +182,34 @@ impl DFA {
         };
         NFA::from(nfa_json)
     }
+    /// Remove the unreachable states in the DFA.
+    /// Returns the new DFA without unreachable states.
+    pub fn remove_unreachable(&self) -> Self {
+        let mut stack = vec![self.start];
+        let mut reachable = BTreeSet::from([self.start]);
+        while let Some(state) = stack.pop() {
+            if let Some(transition) = self.transitions.get(&state) {
+                for &to in transition.values() {
+                    if reachable.insert(to) {
+                        stack.push(to);
+                    }
+                }
+            }
+        }
+        let mut dfa_json: DFAJson = self.into();
+        dfa_json.accept = dfa_json.accept.intersection(&reachable).cloned().collect();
+        dfa_json.transitions = dfa_json
+            .transitions
+            .into_iter()
+            .filter(|(s, _, n)| reachable.contains(s) && reachable.contains(n))
+            .collect();
+        Self::from(dfa_json)
+    }
     /// Minimize the DFA.
     /// Returns the minimized DFA and the description of the minimization process.
     /// The description is a markdown string.
-    /// You should make sure there is no unreachable states in the DFA.
     pub fn minimize(&self) -> (Self, String) {
-        let (size, dfa) = self.re_index(0);
+        let (size, dfa) = self.remove_unreachable().re_index(0);
         let mut markdown = "# Minimization of DFA\n".to_string();
         markdown.push_str("\n## Initial DFA\n");
         markdown.push_str(&dfa.to_inline_mermaid());
