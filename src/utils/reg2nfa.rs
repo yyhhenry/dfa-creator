@@ -7,8 +7,7 @@ pub struct R2NArgs {
     /// Regular expression.
     /// Supported operators: `*`, `|`, `()`.
     regex: String,
-    /// Output file
-    /// If not provided, the output will be printed to stdout.
+    /// Output file. (stdout if not present)
     /// Supported formats: md, json.
     #[clap(short, long)]
     output: Option<String>,
