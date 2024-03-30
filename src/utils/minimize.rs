@@ -4,12 +4,9 @@ use dfa_creator::dfa;
 
 #[derive(Parser)]
 pub struct MinimizeArgs {
-    /// Input DFA file to minimize
-    /// Supported formats: json.
+    /// Input DFA file *.json.
     input: String,
-    /// Output file
-    /// `md` for markdown about the conversion.
-    /// `json` for the DFA.
+    /// Output file.
     /// Supported formats: md, json.
     #[clap(short, long)]
     output: String,

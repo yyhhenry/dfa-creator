@@ -4,14 +4,12 @@ use dfa_creator::{dfa, nfa};
 
 #[derive(Parser)]
 pub struct ShowArgs {
-    /// Input file
-    /// Supported formats: json.
+    /// Input file *.json.
     input: String,
-    /// Output file
-    /// Supported formats: md.
+    /// Output file *.md.
     #[clap(short, long)]
     output: String,
-    /// Enable DFA mode (default is NFA mode)
+    /// Enable DFA mode (NFA mode by default).
     #[clap(short, long)]
     nfa: bool,
 }
