@@ -30,14 +30,8 @@ jobs:
       - name: Rename binary for Windows
         if: runner.os == 'Windows'
         run: |
-          $exePath = "target/release/dfa-creator.exe"
-          $newExePath = "target/release/dfa-creator-${{ github.ref_name }}-windows.exe"
-          if (Test-Path $exePath) {
-            Rename-Item -Path $exePath -NewName $newExePath
-          } else {
-            Write-Error "The file $exePath does not exist."
-          }
-        shell: pwsh
+          ls target/release
+          mv target/release/dfa-creator.exe target/release/dfa-creator-${{ github.ref_name }}-windows.exe
 
       - name: Rename binary for Linux
         if: runner.os == 'Linux'
