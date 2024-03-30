@@ -13,9 +13,9 @@ serde_json = "1.0.114"
 thiserror = "1.0.58"
 
 [features]
-binanry-deps = ["clap", "anyhow"]
+bin-deps = ["clap", "anyhow"]
 
 [[bin]]
 name = "dfac"
 path = "src/main.rs"
-required-features = ["binanry-deps"]
+required-features = ["bin-deps"]
