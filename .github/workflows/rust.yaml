@@ -20,4 +20,4 @@ jobs:
       - name: Run tests
         run: cargo test
       - name: Build Binary
-        run: cargo build --bin dfac -F bin-deps
+        run: cargo build -F dfac

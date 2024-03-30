@@ -1,4 +1,5 @@
 [package]
+default-run = "dfac"
 edition = "2021"
 name = "dfa-creator"
 version = "0.1.2"
@@ -13,9 +14,9 @@ serde_json = "1.0.114"
 thiserror = "1.0.58"
 
 [features]
-bin-deps = ["clap", "anyhow"]
+dfac = ["clap", "anyhow"]
 
 [[bin]]
 name = "dfac"
 path = "src/main.rs"
-required-features = ["bin-deps"]
+required-features = ["dfac"]
