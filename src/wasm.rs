@@ -2,22 +2,25 @@ use crate::{dfa::DFA, nfa::NFA};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-/// Convert a DFA JSON to a mermaid graph
-pub fn dfa2mermaid(dfa_json: String) -> String {
-    let dfa = DFA::from_json(&dfa_json).unwrap();
-    dfa.to_mermaid()
+/// Convert DFA to mermaid graph
+/// Throws when the JSON is invalid
+pub fn dfa2mermaid(dfa_json: String) -> Result<String, JsError> {
+    let dfa = DFA::from_json(&dfa_json).map_err(JsError::from)?;
+    Ok(dfa.to_mermaid())
 }
 
 #[wasm_bindgen]
-/// Convert a NFA JSON to a mermaid graph
-pub fn nfa2mermaid(nfa_json: String) -> String {
-    let nfa = NFA::from_json(&nfa_json).unwrap();
-    nfa.to_mermaid()
+/// Convert NFA to mermaid graph
+/// Throws when the JSON is invalid
+pub fn nfa2mermaid(nfa_json: String) -> Result<String, JsError> {
+    let nfa = NFA::from_json(&nfa_json).map_err(JsError::from)?;
+    Ok(nfa.to_mermaid())
 }
 
 #[wasm_bindgen]
-/// Construct a NFA from a regular expression
+/// Construct NFA from regular expression
 /// and return the JSON representation
+/// Throws when the regular expression is invalid
 /// We only support the following syntax:
 /// ```txt
 /// <regex> ::= <term> '|' <regex> | <term>
@@ -25,41 +28,27 @@ pub fn nfa2mermaid(nfa_json: String) -> String {
 /// <factor> ::= <base> '*' | <base>
 /// <base> ::= <char> | '(' <regex> ')'
 /// ```
-pub fn reg2nfa(reg: String) -> String {
-    let nfa = NFA::from_regex(&reg).unwrap();
-    nfa.to_json()
+pub fn reg2nfa(reg: String) -> Result<String, JsError> {
+    let nfa = NFA::from_regex(&reg).map_err(JsError::from)?;
+    Ok(nfa.to_json())
 }
 
 #[wasm_bindgen]
-/// Convert a NFA JSON to a DFA JSON
-pub fn nfa2dfa(nfa_json: String) -> String {
-    let nfa = NFA::from_json(&nfa_json).unwrap();
-    let (dfa, _) = nfa.to_dfa();
-    dfa.to_json()
+/// Convert NFA to DFA
+/// Returns (dfa_json, markdown)
+/// Throws when the NFA JSON is invalid
+pub fn nfa2dfa(nfa_json: String) -> Result<Vec<String>, JsError> {
+    let nfa = NFA::from_json(&nfa_json).map_err(JsError::from)?;
+    let (dfa, markdown) = nfa.to_dfa();
+    Ok(vec![dfa.to_json(), markdown])
 }
 
 #[wasm_bindgen]
-/// Convert a NFA to a DFA
-/// and return a markdown representation of the process
-pub fn nfa2dfa_markdown(nfa_json: String) -> String {
-    let nfa = NFA::from_json(&nfa_json).unwrap();
-    let (_, markdown) = nfa.to_dfa();
-    markdown
-}
-
-#[wasm_bindgen]
-/// Minimize a DFA
-pub fn minimize_dfa(dfa_json: String) -> String {
-    let dfa = DFA::from_json(&dfa_json).unwrap();
-    let (min_dfa, _) = dfa.minimize();
-    min_dfa.to_json()
-}
-
-#[wasm_bindgen]
-/// Minimize a DFA
-/// and return a markdown representation of the process
-pub fn minimize_dfa_markdown(dfa_json: String) -> String {
-    let dfa = DFA::from_json(&dfa_json).unwrap();
-    let (_, markdown) = dfa.minimize();
-    markdown
+/// Minimize DFA
+/// Returns (min_dfa_json, markdown)
+/// Throws when the DFA JSON is invalid
+pub fn minimize_dfa(dfa_json: String) -> Result<Vec<String>, JsError> {
+    let dfa = DFA::from_json(&dfa_json).map_err(JsError::from)?;
+    let (min_dfa, markdown) = dfa.minimize();
+    Ok(vec![min_dfa.to_json(), markdown])
 }
