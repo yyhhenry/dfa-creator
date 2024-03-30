@@ -182,12 +182,34 @@ impl DFA {
         };
         NFA::from(nfa_json)
     }
+    /// Remove the unreachable states in the DFA.
+    /// Returns the new DFA without unreachable states.
+    pub fn remove_unreachable(&self) -> Self {
+        let mut stack = vec![self.start];
+        let mut reachable = BTreeSet::from([self.start]);
+        while let Some(state) = stack.pop() {
+            if let Some(transition) = self.transitions.get(&state) {
+                for &to in transition.values() {
+                    if reachable.insert(to) {
+                        stack.push(to);
+                    }
+                }
+            }
+        }
+        let mut dfa_json: DFAJson = self.into();
+        dfa_json.accept = dfa_json.accept.intersection(&reachable).cloned().collect();
+        dfa_json.transitions = dfa_json
+            .transitions
+            .into_iter()
+            .filter(|(s, _, n)| reachable.contains(s) && reachable.contains(n))
+            .collect();
+        Self::from(dfa_json)
+    }
     /// Minimize the DFA.
     /// Returns the minimized DFA and the description of the minimization process.
     /// The description is a markdown string.
-    /// You should make sure there is no unreachable states in the DFA.
     pub fn minimize(&self) -> (Self, String) {
-        let (size, dfa) = self.re_index(0);
+        let (size, dfa) = self.remove_unreachable().re_index(0);
         let mut markdown = "# Minimization of DFA\n".to_string();
         markdown.push_str("\n## Initial DFA\n");
         markdown.push_str(&dfa.to_inline_mermaid());
@@ -365,12 +387,10 @@ mod test {
         let nfa = NFA::from_regex("a(b|c)*d").unwrap();
         let (dfa, _) = nfa.to_dfa();
         let nfa_1 = dfa.to_nfa();
-        let dfa_1 = dfa.minimize().0;
         let test_all = |s: &str| {
             let ans = nfa.test(s);
             assert_eq!(dfa.test(s), ans);
             assert_eq!(nfa_1.test(s), ans);
-            assert_eq!(dfa_1.test(s), ans);
         };
         let tests = [
             "ad",
@@ -386,5 +406,55 @@ mod test {
         for s in tests {
             test_all(s);
         }
+    }
+
+    #[test]
+    fn remove_unreachable_test() {
+        let dfa_json = DFAJson {
+            start: 0,
+            accept: [1, 2].into(),
+            transitions: vec![(0, 'a', 1), (0, 'b', 1), (2, 'a', 1)],
+        };
+        let dfa = DFA::from(&dfa_json).remove_unreachable();
+        let result_json = DFAJson {
+            start: 0,
+            accept: [1].into(),
+            transitions: vec![(0, 'a', 1), (0, 'b', 1)],
+        };
+        assert_eq!(dfa.to_json(), result_json.to_json());
+    }
+
+    #[test]
+    fn minimize_test() {
+        let dfa_json = DFAJson {
+            start: 0,
+            accept: [5].into(),
+            transitions: vec![
+                (0, 'a', 1),
+                (0, 'b', 2),
+                (1, 'a', 3),
+                (1, 'b', 4),
+                (2, 'a', 4),
+                (2, 'b', 3),
+                (3, 'a', 5),
+                (3, 'b', 5),
+                (4, 'a', 5),
+                (4, 'b', 5),
+            ],
+        };
+        let dfa = DFA::from(&dfa_json).minimize().0;
+        let result_json = DFAJson {
+            start: 0,
+            accept: [3].into(),
+            transitions: vec![
+                (0, 'a', 1),
+                (0, 'b', 1),
+                (1, 'a', 2),
+                (1, 'b', 2),
+                (2, 'a', 3),
+                (2, 'b', 3),
+            ],
+        };
+        assert_eq!(dfa.to_json(), result_json.to_json());
     }
 }
