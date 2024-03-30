@@ -29,9 +29,7 @@ jobs:
 
       - name: Rename binary for Windows
         if: runner.os == 'Windows'
-        run: |
-          ls target/release
-          mv target/release/dfa-creator.exe target/release/dfa-creator-${{ github.ref_name }}-windows.exe
+        run: mv target/release/dfa-creator.exe target/release/dfa-creator-${{ github.ref_name }}-windows.exe
 
       - name: Rename binary for Linux
         if: runner.os == 'Linux'
@@ -53,8 +51,6 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            dfa-creator-v*-*-linux
-            dfa-creator-v*-*-windows.exe
+          files: dfa-creator-v*-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
