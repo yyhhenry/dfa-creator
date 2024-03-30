@@ -42,6 +42,21 @@ jobs:
           name: dfac-linux
           path: target/release/dfac-${{ github.ref_name }}-linux
 
+  publish-wasm:
+    name: Publish WASM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Build WASM
+        run: wasm-pack build
+
+      - name: Publish WASM
+        run: wasm-pack publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
+
   release:
     needs: build
     runs-on: ubuntu-latest
