@@ -6,8 +6,16 @@ version = "0.1.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.81"
-clap = {version = "4.5.3", features = ["derive"]}
+anyhow = {version = "1.0.81", optional = true}
+clap = {version = "4.5.3", features = ["derive"], optional = true}
 serde = {version = "1.0.197", features = ["derive"]}
 serde_json = "1.0.114"
 thiserror = "1.0.58"
+
+[features]
+binanry-deps = ["clap", "anyhow"]
+
+[[bin]]
+name = "dfac"
+path = "src/main.rs"
+required-features = ["binanry-deps"]
