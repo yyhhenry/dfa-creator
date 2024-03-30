@@ -28,14 +28,14 @@ jobs:
         if: runner.os == 'Linux'
         run: mv target/release/dfa-creator target/release/dfa-creator-${{ github.ref_name }}-linux
 
-      - name: Upload Release Asset
+      - name: Upload Release Asset for Windows
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: dfa-creator-${{ github.ref_name }}-windows
           path: target/release/dfa-creator-${{ github.ref_name }}-windows.exe
 
-      - name: Upload Release Asset
+      - name: Upload Release Asset for Linux
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
@@ -46,15 +46,16 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Download Artifacts
         uses: actions/download-artifact@v4
-
-      - name: Check Release Assets
-        run: ls
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          body_file: README.md
           files: |
             dfa-creator-${{ github.ref_name }}-windows
             dfa-creator-${{ github.ref_name }}-linux
