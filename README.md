@@ -1,18 +1,16 @@
 # DFA Creator
 
-## Description
+Tool to create and minimize DFA/NFA.
 
-Tool for creating NFA and DFA.
+## Features
 
-Rust source [dfa-creator](https://github.com/yyhhenry/dfa-creator).
-
-Rust release [dfac](https://github.com/yyhhenry/dfa-creator/releases/latest).
+Rust library [dfa-creator](https://github.com/yyhhenry/dfa-creator) (Binary release [dfac](https://github.com/yyhhenry/dfa-creator/releases/latest)).
 
 TypeScript library [dfa-creator](https://npmjs.com/package/dfa-creator).
 
-Web demo [dfac-web](https://dfac.pages.dev/).
+Web demo [DFA Creator](https://dfac.pages.dev/) (Source [dfa-creator-web](https://github.com/yyhhenry/dfa-creator-web)).
 
-## Usage for dfac
+## Usage for `dfac`
 
 ```bash
 # Build dfac (or download from releases)
