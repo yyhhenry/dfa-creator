@@ -310,6 +310,7 @@ impl DFA {
             }
             groups.remove(g);
             groups.extend(new_groups.into_iter().map(|(_, g)| g));
+            groups.sort_unstable_by_key(|g| *g.first().unwrap());
             markdown.push_str(&groups2s(&mut index, &groups));
         }
         markdown.push_str("\n## Minimized DFA\n");
