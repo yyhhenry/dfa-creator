@@ -52,3 +52,21 @@ pub fn minimize_dfa(dfa_json: String) -> Result<Vec<String>, JsError> {
     let (min_dfa, markdown) = dfa.minimize();
     Ok(vec![min_dfa.to_json(), markdown])
 }
+
+#[wasm_bindgen]
+/// Test if the input string is accepted by the DFA
+/// Returns true if accepted, false otherwise
+/// Throws when the DFA JSON is invalid
+pub fn test_dfa(dfa_json: String, input: String) -> Result<bool, JsError> {
+    let dfa = DFA::from_json(&dfa_json).map_err(JsError::from)?;
+    Ok(dfa.test(&input))
+}
+
+#[wasm_bindgen]
+/// Test if the input string is accepted by the NFA
+/// Returns true if accepted, false otherwise
+/// Throws when the NFA JSON is invalid
+pub fn test_nfa(nfa_json: String, input: String) -> Result<bool, JsError> {
+    let nfa = NFA::from_json(&nfa_json).map_err(JsError::from)?;
+    Ok(nfa.test(&input))
+}
