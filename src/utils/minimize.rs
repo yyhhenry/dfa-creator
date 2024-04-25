@@ -18,7 +18,7 @@ pub fn minimize(args: MinimizeArgs) -> Result<()> {
         return Err(anyhow!("Input file does not exist"));
     }
     let nfa_json = std::fs::read_to_string(&input)?;
-    let nfa = dfa::DFA::from_json(&nfa_json)?;
+    let nfa = dfa::Dfa::from_json(&nfa_json)?;
     let (dfa, markdown) = nfa.minimize();
     let output = std::path::Path::new(&args.output);
     let folder = output

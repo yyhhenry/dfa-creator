@@ -18,7 +18,7 @@ pub fn nfa2dfa(args: N2DArgs) -> Result<()> {
         return Err(anyhow!("Input file does not exist"));
     }
     let nfa_json = std::fs::read_to_string(&input)?;
-    let nfa = nfa::NFA::from_json(&nfa_json)?;
+    let nfa = nfa::Nfa::from_json(&nfa_json)?;
     let (dfa, markdown) = nfa.to_dfa();
     let output = std::path::Path::new(&args.output);
     let folder = output

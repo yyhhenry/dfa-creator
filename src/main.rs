@@ -15,10 +15,10 @@ enum Commands {
     Minimize(MinimizeArgs),
     /// Convert an NFA to a DFA
     #[clap(name = "n2d")]
-    NFA2DFA(N2DArgs),
+    NfaToDfa(N2DArgs),
     /// Convert a regex to an NFA
     #[clap(name = "r2n")]
-    Reg2NFA(R2NArgs),
+    RegexToNfa(R2NArgs),
     /// Run a DFA or an NFA
     #[clap(name = "run")]
     Run(RunArgs),
@@ -39,10 +39,10 @@ fn main() -> Result<()> {
         Commands::Minimize(args) => {
             minimize(args)?;
         }
-        Commands::NFA2DFA(args) => {
+        Commands::NfaToDfa(args) => {
             nfa2dfa(args)?;
         }
-        Commands::Reg2NFA(args) => {
+        Commands::RegexToNfa(args) => {
             reg2nfa(args)?;
         }
         Commands::Run(args) => {

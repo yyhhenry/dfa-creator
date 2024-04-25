@@ -14,7 +14,7 @@ pub struct R2NArgs {
 }
 
 pub fn reg2nfa(args: R2NArgs) -> Result<()> {
-    let nfa = nfa::NFA::from_regex(&args.regex)?;
+    let nfa = nfa::Nfa::from_regex(&args.regex)?;
     if let Some(output) = args.output {
         let path = std::path::Path::new(&output);
         let format = path.extension().and_then(|s| s.to_str()).unwrap_or("md");
