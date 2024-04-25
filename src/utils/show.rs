@@ -26,11 +26,11 @@ pub fn show(args: ShowArgs) -> Result<()> {
         .ok_or_else(|| anyhow!("Invalid output path"))?;
     std::fs::create_dir_all(folder)?;
     if args.nfa {
-        let nfa = nfa::NFA::from_json(&json)?;
+        let nfa = nfa::Nfa::from_json(&json)?;
         let md = nfa.to_markdown("NFA", "Show NFA");
         std::fs::write(&output, md)?;
     } else {
-        let dfa = dfa::DFA::from_json(&json)?;
+        let dfa = dfa::Dfa::from_json(&json)?;
         let md = dfa.to_markdown("DFA", "Show DFA");
         std::fs::write(&output, md)?;
     }

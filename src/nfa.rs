@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, BTreeSet},
@@ -6,9 +5,11 @@ use std::{
 use thiserror::Error;
 
 use crate::{
-    dfa::{DFAJson, DFA},
+    dfa::Dfa,
     numberer::{set2s, DisjointSet, Numberer},
+    wasm::{DfaJson, NfaJson},
 };
+
 #[derive(Error, Debug)]
 pub enum RegexSyntaxError {
     #[error("Unmatched Parentheses: {0}")]
@@ -24,13 +25,7 @@ pub enum FromJsonError {
 type Token = Option<char>;
 type Transition = BTreeMap<Token, BTreeSet<usize>>;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NFAJson {
-    pub start: usize,
-    pub accept: usize,
-    pub transitions: Vec<(usize, Token, usize)>,
-}
-impl NFAJson {
+impl NfaJson {
     /// Re-index the states of the NFA.
     /// Returns the new size and the re-indexed NFA.
     pub fn re_index(&self, index: usize) -> (usize, Self) {
@@ -128,7 +123,7 @@ impl NFAJson {
 }
 
 #[derive(Debug, Clone)]
-pub struct NFA {
+pub struct Nfa {
     /// The start state of the NFA.
     start: usize,
     /// The accept state of the NFA.
@@ -139,21 +134,21 @@ pub struct NFA {
     /// The key None represents epsilon transitions.
     transitions: BTreeMap<usize, Transition>,
 }
-impl NFA {
+impl Nfa {
     /// Re-index the states of the NFA.
     /// Returns the new size and the re-indexed NFA.
     pub fn re_index(&self, index: usize) -> (usize, Self) {
-        let (size, json) = NFAJson::from(self).re_index(index);
-        (size, NFA::try_from(json).unwrap())
+        let (size, json) = NfaJson::from(self).re_index(index);
+        (size, Nfa::try_from(json).unwrap())
     }
     /// Merge the states by the disjoint set.
     /// You should ensure that the disjoint set is generated from the same NFA.
     /// In other words, the NFA should be re-indexed from 0 before merging.
     pub fn merge_by(&self, m: DisjointSet) -> Self {
-        let json = NFAJson::from(self).merge_by(m);
-        NFA::try_from(json).unwrap()
+        let json = NfaJson::from(self).merge_by(m);
+        Nfa::try_from(json).unwrap()
     }
-    pub fn star(&self) -> NFA {
+    pub fn star(&self) -> Nfa {
         let (size, mut nfa) = self.re_index(0);
         if nfa.start == nfa.accept {
             // No need to add a new start state
@@ -183,7 +178,7 @@ impl NFA {
             .or_insert_with(BTreeSet::new)
             .insert(next);
     }
-    pub fn or(&self, rhs: &Self) -> NFA {
+    pub fn or(&self, rhs: &Self) -> Nfa {
         let (sl, lhs) = self.re_index(0);
         let (sr, rhs) = rhs.re_index(sl);
 
@@ -196,7 +191,7 @@ impl NFA {
         let (ss, tt) = (r.i("ss"), r.i("tt"));
         let size = r.end();
 
-        let mut nfa = NFA {
+        let mut nfa = Nfa {
             start: ss,
             accept: tt,
             transitions: lhs.transitions.into_iter().chain(rhs.transitions).collect(),
@@ -220,7 +215,7 @@ impl NFA {
         }
         nfa.merge_by(m)
     }
-    pub fn concat(&self, rhs: &Self) -> NFA {
+    pub fn concat(&self, rhs: &Self) -> Nfa {
         let (sl, lhs) = self.re_index(0);
         let (sr, rhs) = rhs.re_index(sl);
 
@@ -231,7 +226,7 @@ impl NFA {
         let (rs, rt) = (rhs.start, rhs.accept);
         let size = sl + sr;
 
-        let mut nfa = NFA {
+        let mut nfa = Nfa {
             start: ls,
             accept: rt,
             transitions: lhs.transitions.into_iter().chain(rhs.transitions).collect(),
@@ -244,31 +239,31 @@ impl NFA {
         nfa.merge_by(m)
     }
     pub fn to_mermaid(&self) -> String {
-        NFAJson::from(self).to_mermaid()
+        NfaJson::from(self).to_mermaid()
     }
     pub fn to_inline_mermaid(&self) -> String {
-        NFAJson::from(self).to_inline_mermaid()
+        NfaJson::from(self).to_inline_mermaid()
     }
     pub fn to_markdown(&self, title: &str, description: &str) -> String {
-        NFAJson::from(self).to_markdown(title, description)
+        NfaJson::from(self).to_markdown(title, description)
     }
     pub fn to_json(&self) -> String {
-        let json = NFAJson::from(self);
+        let json = NfaJson::from(self);
         json.to_json()
     }
     pub fn from_json(json: &str) -> Result<Self, FromJsonError> {
-        let json = NFAJson::from_json(json)?;
+        let json = NfaJson::from_json(json)?;
         Ok(Self::from(json))
     }
     pub fn concat_all(nfa_list: &[Self]) -> Self {
-        let mut result = NFA::from(None);
+        let mut result = Nfa::from(None);
         for nfa in nfa_list {
             result = result.concat(nfa);
         }
         result
     }
     pub fn is_pure(&self) -> (bool, bool) {
-        NFAJson::from(self).is_pure()
+        NfaJson::from(self).is_pure()
     }
     pub fn or_all(nfa_list: &[Self]) -> Self {
         let mut result = nfa_list[0].clone();
@@ -288,7 +283,7 @@ impl NFA {
     pub fn from_regex(reg: &str) -> Result<Self, RegexSyntaxError> {
         #[derive(Debug)]
         enum Elem {
-            Base(NFA),
+            Base(Nfa),
             Star,
             Or,
         }
@@ -302,12 +297,12 @@ impl NFA {
                         RegexSyntaxError::UnmatchedParentheses(format!("')' at {} in {}", i, reg))
                     })?;
                     if stack.is_empty() {
-                        elem_list.push(Elem::Base(NFA::from_regex(&reg[start + 1..i])?));
+                        elem_list.push(Elem::Base(Nfa::from_regex(&reg[start + 1..i])?));
                     }
                 }
                 ('*', 0) => elem_list.push(Elem::Star),
                 ('|', 0) => elem_list.push(Elem::Or),
-                (_, 0) => elem_list.push(Elem::Base(NFA::from(Some(c)))),
+                (_, 0) => elem_list.push(Elem::Base(Nfa::from(Some(c)))),
                 _ => {}
             }
         }
@@ -328,7 +323,7 @@ impl NFA {
                 elem => elem_list.push(elem),
             }
         }
-        let mut result = vec![NFA::from(None)];
+        let mut result = vec![Nfa::from(None)];
         for elem in elem_list {
             match elem {
                 Elem::Base(nfa) => {
@@ -336,7 +331,7 @@ impl NFA {
                     result.push(prev.concat(&nfa));
                 }
                 _ => {
-                    result.push(NFA::from(None));
+                    result.push(Nfa::from(None));
                 }
             }
         }
@@ -363,7 +358,7 @@ impl NFA {
     /// Convert the NFA to a DFA.
     /// Use subset construction.
     /// Returns the DFA and a Markdown string of the process.
-    pub fn to_dfa(&self) -> (DFA, String) {
+    pub fn to_dfa(&self) -> (Dfa, String) {
         let (_, nfa) = self.re_index(0);
 
         let mut state_sets = vec![nfa.epsilon_closure(BTreeSet::from([nfa.start]))];
@@ -415,12 +410,12 @@ impl NFA {
             }
             current += 1;
         }
-        let dfa_json = DFAJson {
+        let dfa_json = DfaJson {
             start: dfa_start,
             accept: dfa_accept,
             transitions: dfa_transitions,
         };
-        let dfa = DFA::from(dfa_json);
+        let dfa = Dfa::from(dfa_json);
         markdown.push_str("\n## DFA\n");
         markdown.push_str(&dfa.to_inline_mermaid());
         (dfa, markdown)
@@ -441,16 +436,16 @@ impl NFA {
         current.contains(&self.accept)
     }
 }
-impl From<Token> for NFA {
+impl From<Token> for Nfa {
     fn from(c: Token) -> Self {
         if c.is_some() {
-            NFA {
+            Nfa {
                 start: 0,
                 accept: 1,
                 transitions: [(0, [(c, [1].into())].into())].into(),
             }
         } else {
-            NFA {
+            Nfa {
                 start: 0,
                 accept: 0,
                 transitions: [].into(),
@@ -458,10 +453,10 @@ impl From<Token> for NFA {
         }
     }
 }
-impl<T: Borrow<NFAJson>> From<T> for NFA {
+impl<T: Borrow<NfaJson>> From<T> for Nfa {
     fn from(nfa_json: T) -> Self {
-        let json: &NFAJson = nfa_json.borrow();
-        let mut nfa = NFA {
+        let json: &NfaJson = nfa_json.borrow();
+        let mut nfa = Nfa {
             start: json.start,
             accept: json.accept,
             transitions: [].into(),
@@ -472,9 +467,9 @@ impl<T: Borrow<NFAJson>> From<T> for NFA {
         nfa
     }
 }
-impl<T: Borrow<NFA>> From<T> for NFAJson {
+impl<T: Borrow<Nfa>> From<T> for NfaJson {
     fn from(nfa: T) -> Self {
-        let nfa: &NFA = nfa.borrow();
+        let nfa: &Nfa = nfa.borrow();
         let mut transitions = vec![];
         for (state, map) in nfa.transitions.iter() {
             for (c, set) in map {
@@ -484,7 +479,7 @@ impl<T: Borrow<NFA>> From<T> for NFAJson {
             }
         }
         transitions.sort_unstable();
-        NFAJson {
+        NfaJson {
             start: nfa.start,
             accept: nfa.accept,
             transitions,
@@ -497,7 +492,7 @@ mod test {
     use super::*;
     #[test]
     fn basic_test() {
-        let nfa = NFA::from_regex("a(b|c)*d").unwrap();
+        let nfa = Nfa::from_regex("a(b|c)*d").unwrap();
         assert_eq!(nfa.test("ad"), true);
         assert_eq!(nfa.test("abd"), true);
         assert_eq!(nfa.test("acd"), true);
@@ -510,7 +505,7 @@ mod test {
     }
     #[test]
     fn re_index_test() {
-        let nfa = NFA::from_regex("a(b|c)*d").unwrap();
+        let nfa = Nfa::from_regex("a(b|c)*d").unwrap();
         let (size, nfa_a) = nfa.re_index(0);
         let nfa_b = nfa_a.merge_by(DisjointSet::new(size));
         let test_all = |s: &str| {
@@ -529,7 +524,7 @@ mod test {
     }
     #[test]
     fn nest_test() {
-        let nfa = NFA::from_regex("_|((a|b)*|(c|d)*)").unwrap();
+        let nfa = Nfa::from_regex("_|((a|b)*|(c|d)*)").unwrap();
         assert_eq!(nfa.test("_"), true);
         assert_eq!(nfa.test("abbab"), true);
         assert_eq!(nfa.test("cdcd"), true);
@@ -540,9 +535,9 @@ mod test {
 
     #[test]
     fn priority_test() {
-        let nfa_a = NFA::from_regex("a*|b*").unwrap();
-        let nfa_b = NFA::from_regex("(a|b)*").unwrap();
-        let nfa_c = NFA::from_regex("a*b*").unwrap();
+        let nfa_a = Nfa::from_regex("a*|b*").unwrap();
+        let nfa_b = Nfa::from_regex("(a|b)*").unwrap();
+        let nfa_c = Nfa::from_regex("a*b*").unwrap();
         let test_all = |s: &str| (nfa_a.test(s), nfa_b.test(s), nfa_c.test(s));
         assert_eq!(test_all("aaa"), (true, true, true));
         assert_eq!(test_all("bbb"), (true, true, true));
@@ -553,30 +548,30 @@ mod test {
     #[test]
     fn syntax_error_test() {
         // Unmatched '('
-        let nfa = NFA::from_regex("a(b|c*d");
+        let nfa = Nfa::from_regex("a(b|c*d");
         assert_eq!(
             nfa.unwrap_err().to_string(),
             "Unmatched Parentheses: '(' at 1 in a(b|c*d"
         );
         // Unmatched '('
-        let nfa = NFA::from_regex("a(b|c)*d)");
+        let nfa = Nfa::from_regex("a(b|c)*d)");
         assert_eq!(
             nfa.unwrap_err().to_string(),
             "Unmatched Parentheses: ')' at 8 in a(b|c)*d)"
         );
         // No element to star
-        let nfa = NFA::from_regex("a(*b|c)d");
+        let nfa = Nfa::from_regex("a(*b|c)d");
         assert_eq!(nfa.unwrap_err().to_string(), "No Element to Star: *b|c");
 
-        let nfa = NFA::from_regex("a|*c");
+        let nfa = Nfa::from_regex("a|*c");
         assert_eq!(nfa.unwrap_err().to_string(), "No Element to Star: a|*c");
     }
 
     #[test]
     fn json_test() {
-        let nfa = NFA::from_regex("a(b|c)*d").unwrap();
+        let nfa = Nfa::from_regex("a(b|c)*d").unwrap();
         let json = nfa.to_json();
-        let nfa2 = NFA::from_json(&json).unwrap();
+        let nfa2 = Nfa::from_json(&json).unwrap();
         assert_eq!(nfa.test("ad"), nfa2.test("ad"));
         assert_eq!(nfa.test("abd"), nfa2.test("abd"));
         assert_eq!(nfa.test("acd"), nfa2.test("acd"));
@@ -590,19 +585,19 @@ mod test {
 
     #[test]
     fn json_order_test() {
-        let nfa = NFA::from_regex("a(b|c)*d").unwrap();
+        let nfa = Nfa::from_regex("a(b|c)*d").unwrap();
         let json = nfa.to_json();
-        let nfa2 = NFA::from_json(&json).unwrap();
+        let nfa2 = Nfa::from_json(&json).unwrap();
         assert_eq!(nfa.to_json(), nfa2.to_json());
     }
 
     #[test]
     fn empty_test() {
-        let nfa = NFA::from_regex("").unwrap();
+        let nfa = Nfa::from_regex("").unwrap();
         assert_eq!(nfa.test(""), true);
         assert_eq!(nfa.test("a"), false);
 
-        let nfa = NFA::from_regex("(|b)|").unwrap();
+        let nfa = Nfa::from_regex("(|b)|").unwrap();
         assert_eq!(nfa.test(""), true);
         assert_eq!(nfa.test("b"), true);
         assert_eq!(nfa.test("a"), false);
@@ -611,14 +606,14 @@ mod test {
 
     #[test]
     fn star_test() {
-        let nfa = NFA::from_regex("(a*b)*").unwrap();
+        let nfa = Nfa::from_regex("(a*b)*").unwrap();
         assert_eq!(nfa.test(""), true);
         assert_eq!(nfa.test("a"), false);
         assert_eq!(nfa.test("b"), true);
         assert_eq!(nfa.test("abbaab"), true);
         assert_eq!(nfa.test("ababa"), false);
 
-        let nfa = NFA::from_regex("(ab*)*").unwrap();
+        let nfa = Nfa::from_regex("(ab*)*").unwrap();
         assert_eq!(nfa.test(""), true);
         assert_eq!(nfa.test("a"), true);
         assert_eq!(nfa.test("b"), false);

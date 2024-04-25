@@ -1,8 +1,8 @@
 use crate::{
-    nfa::{NFAJson, NFA},
+    nfa::Nfa,
     numberer::{set2s, DisjointSet, Numberer},
+    wasm::{DfaJson, NfaJson},
 };
-use serde::{Deserialize, Serialize};
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, BTreeSet},
@@ -18,13 +18,7 @@ pub enum FromJsonError {
 type Token = char;
 type Transition = BTreeMap<Token, usize>;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DFAJson {
-    pub start: usize,
-    pub accept: BTreeSet<usize>,
-    pub transitions: Vec<(usize, Token, usize)>,
-}
-impl DFAJson {
+impl DfaJson {
     /// Re-index the DFAJson to start from `index`.
     /// Returns the new size of the DFAJson and the re-indexed DFAJson.
     pub fn re_index(&self, index: usize) -> (usize, Self) {
@@ -115,7 +109,7 @@ impl DFAJson {
 }
 
 #[derive(Debug, Clone)]
-pub struct DFA {
+pub struct Dfa {
     /// The start state of the DFA.
     start: usize,
     /// The set of accept states in the DFA.
@@ -124,11 +118,11 @@ pub struct DFA {
     /// state -> (token -> state)
     transitions: BTreeMap<usize, Transition>,
 }
-impl DFA {
+impl Dfa {
     /// Re-index the DFA to start from `index`.
     /// Returns the new size of the DFA and the re-indexed DFA.
-    pub fn re_index(&self, index: usize) -> (usize, DFA) {
-        let dfa_json: DFAJson = self.into();
+    pub fn re_index(&self, index: usize) -> (usize, Dfa) {
+        let dfa_json: DfaJson = self.into();
         let (size, dfa_json) = dfa_json.re_index(index);
         (size, Self::from(dfa_json))
     }
@@ -136,28 +130,28 @@ impl DFA {
     /// You should ensure that the disjoint set is generated from the same DFA.
     /// In other words, the DFA should be re-indexed from 0 before merging.
     pub fn merge_by(&self, m: DisjointSet) -> Self {
-        let dfa_json: DFAJson = self.into();
+        let dfa_json: DfaJson = self.into();
         let dfa_json = dfa_json.merge_by(m);
         Self::from(dfa_json)
     }
     pub fn to_json(&self) -> String {
-        let dfa_json: DFAJson = self.into();
+        let dfa_json: DfaJson = self.into();
         dfa_json.to_json()
     }
     pub fn from_json(json: &str) -> Result<Self, FromJsonError> {
-        let dfa_json = DFAJson::from_json(json)?;
+        let dfa_json = DfaJson::from_json(json)?;
         Ok(Self::from(dfa_json))
     }
     pub fn to_mermaid(&self) -> String {
-        let dfa_json: DFAJson = self.into();
+        let dfa_json: DfaJson = self.into();
         dfa_json.to_mermaid()
     }
     pub fn to_inline_mermaid(&self) -> String {
-        let dfa_json: DFAJson = self.into();
+        let dfa_json: DfaJson = self.into();
         dfa_json.to_inline_mermaid()
     }
     pub fn to_markdown(&self, title: &str, description: &str) -> String {
-        let dfa_json: DFAJson = self.into();
+        let dfa_json: DfaJson = self.into();
         dfa_json.to_markdown(title, description)
     }
     fn add(&mut self, state: usize, token: Token, to: usize) {
@@ -166,8 +160,8 @@ impl DFA {
             .or_insert_with(BTreeMap::new)
             .insert(token, to);
     }
-    pub fn to_nfa(&self) -> NFA {
-        let (size, dfa_json) = DFAJson::from(self).re_index(0);
+    pub fn to_nfa(&self) -> Nfa {
+        let (size, dfa_json) = DfaJson::from(self).re_index(0);
         let tt = size;
         let mut transitions = dfa_json
             .transitions
@@ -175,12 +169,12 @@ impl DFA {
             .map(|(s, c, n)| (s, Some(c), n))
             .collect::<Vec<_>>();
         transitions.extend(dfa_json.accept.iter().map(|&i| (i, None, tt)));
-        let nfa_json = NFAJson {
+        let nfa_json = NfaJson {
             start: 0,
             accept: tt,
             transitions,
         };
-        NFA::from(nfa_json)
+        Nfa::from(nfa_json)
     }
     /// Remove the unreachable states in the DFA.
     /// Returns the new DFA without unreachable states.
@@ -196,7 +190,7 @@ impl DFA {
                 }
             }
         }
-        let mut dfa_json: DFAJson = self.into();
+        let mut dfa_json: DfaJson = self.into();
         dfa_json.accept = dfa_json.accept.intersection(&reachable).cloned().collect();
         dfa_json.transitions = dfa_json
             .transitions
@@ -227,10 +221,10 @@ impl DFA {
                 .collect()
         }
         /// Find the (g, c) that group g can be divided by token c.
-        fn find_break_point(dfa: &DFA, groups: &Vec<BTreeSet<usize>>) -> Option<(usize, Token)> {
+        fn find_break_point(dfa: &Dfa, groups: &Vec<BTreeSet<usize>>) -> Option<(usize, Token)> {
             let group_of = get_groups_of(groups);
             fn find_group_break_point(
-                dfa: &DFA,
+                dfa: &Dfa,
                 group: &BTreeSet<usize>,
                 group_of: &BTreeMap<usize, usize>,
             ) -> Option<Token> {
@@ -336,9 +330,9 @@ impl DFA {
         self.accept.contains(&state)
     }
 }
-impl<T: Borrow<DFAJson>> From<T> for DFA {
+impl<T: Borrow<DfaJson>> From<T> for Dfa {
     fn from(json: T) -> Self {
-        let json: &DFAJson = json.borrow();
+        let json: &DfaJson = json.borrow();
         let mut dfa = Self {
             start: json.start,
             accept: json.accept.clone(),
@@ -350,9 +344,9 @@ impl<T: Borrow<DFAJson>> From<T> for DFA {
         dfa
     }
 }
-impl<T: Borrow<DFA>> From<T> for DFAJson {
+impl<T: Borrow<Dfa>> From<T> for DfaJson {
     fn from(dfa: T) -> Self {
-        let dfa: &DFA = dfa.borrow();
+        let dfa: &Dfa = dfa.borrow();
         let mut transitions = Vec::new();
         for (from, transition) in dfa.transitions.iter() {
             for (token, to) in transition {
@@ -374,18 +368,18 @@ mod test {
 
     #[test]
     fn json_test() {
-        let dfa_json = DFAJson {
+        let dfa_json = DfaJson {
             start: 0,
             accept: [1].into(),
             transitions: vec![(0, 'a', 1), (0, 'b', 1)],
         };
-        let dfa = DFA::from(&dfa_json);
+        let dfa = Dfa::from(&dfa_json);
         assert_eq!(dfa_json.to_json(), dfa.to_json());
     }
 
     #[test]
     fn basic_test() {
-        let nfa = NFA::from_regex("a(b|c)*d").unwrap();
+        let nfa = Nfa::from_regex("a(b|c)*d").unwrap();
         let (dfa, _) = nfa.to_dfa();
         let nfa_1 = dfa.to_nfa();
         let test_all = |s: &str| {
@@ -411,13 +405,13 @@ mod test {
 
     #[test]
     fn remove_unreachable_test() {
-        let dfa_json = DFAJson {
+        let dfa_json = DfaJson {
             start: 0,
             accept: [1, 2].into(),
             transitions: vec![(0, 'a', 1), (0, 'b', 1), (2, 'a', 1)],
         };
-        let dfa = DFA::from(&dfa_json).remove_unreachable();
-        let result_json = DFAJson {
+        let dfa = Dfa::from(&dfa_json).remove_unreachable();
+        let result_json = DfaJson {
             start: 0,
             accept: [1].into(),
             transitions: vec![(0, 'a', 1), (0, 'b', 1)],
@@ -427,7 +421,7 @@ mod test {
 
     #[test]
     fn minimize_test() {
-        let dfa_json = DFAJson {
+        let dfa_json = DfaJson {
             start: 0,
             accept: [5].into(),
             transitions: vec![
@@ -443,8 +437,8 @@ mod test {
                 (4, 'b', 5),
             ],
         };
-        let dfa = DFA::from(&dfa_json).minimize().0;
-        let result_json = DFAJson {
+        let dfa = Dfa::from(&dfa_json).minimize().0;
+        let result_json = DfaJson {
             start: 0,
             accept: [3].into(),
             transitions: vec![

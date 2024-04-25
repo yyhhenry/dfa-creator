@@ -21,11 +21,11 @@ pub fn run(args: RunArgs) -> Result<()> {
     }
     let json = std::fs::read_to_string(&input)?;
     if args.nfa {
-        let nfa = nfa::NFA::from_json(&json)?;
+        let nfa = nfa::Nfa::from_json(&json)?;
         let result = nfa.test(&args.string);
         println!("{}", result);
     } else {
-        let dfa = dfa::DFA::from_json(&json)?;
+        let dfa = dfa::Dfa::from_json(&json)?;
         let result = dfa.test(&args.string);
         println!("{}", result);
     }
