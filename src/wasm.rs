@@ -28,6 +28,20 @@ mod ts_interface {
         pub transitions: Vec<(usize, Option<char>, usize)>,
     }
 
+    /// DFA from JSON string
+    /// Throws when the JSON is invalid
+    #[wasm_bindgen]
+    pub fn dfaFromJson(json: &str) -> Result<DfaJson> {
+        serde_json::from_str(json).map_err(JsError::from)
+    }
+
+    /// NFA from JSON string
+    /// Throws when the JSON is invalid
+    #[wasm_bindgen]
+    pub fn nfaFromJson(json: &str) -> Result<NfaJson> {
+        serde_json::from_str(json).map_err(JsError::from)
+    }
+
     /// Convert DFA to mermaid graph
     #[wasm_bindgen]
     pub fn dfaToMermaid(dfa: DfaJson) -> String {
