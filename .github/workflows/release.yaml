@@ -49,10 +49,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - run: npm install
+
       - name: Build WASM
-        run: |
-          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          wasm-pack build
+        run: npm run build
 
       - name: Publish WASM
         uses: JS-DevTools/npm-publish@v3

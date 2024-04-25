@@ -2,3 +2,4 @@
 /tmp
 /.vscode
 /dfac*
+node_modules/

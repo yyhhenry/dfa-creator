@@ -1,0 +1,14 @@
+{
+  "name": "dfa-creator",
+  "private": true,
+  "scripts": {
+    "build": "run-s build-only type-check",
+    "build-only": "wasm-pack build",
+    "type-check": "tsc --noEmit pkg/dfa_creator.d.ts"
+  },
+  "devDependencies": {
+    "npm-run-all2": "^6.1.2",
+    "typescript": "^5.4.5",
+    "wasm-pack": "^0.12.1"
+  }
+}
