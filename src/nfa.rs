@@ -182,7 +182,7 @@ impl Nfa {
         let (sl, lhs) = self.re_index(0);
         let (sr, rhs) = rhs.re_index(sl);
 
-        if sl + sr == 2 {
+        if lhs.transitions.is_empty() && rhs.transitions.is_empty() {
             // Only Accept the empty string
             // But we will get a epsilon transition using union rules below
             return Nfa::from(None);
