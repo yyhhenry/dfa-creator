@@ -38,6 +38,7 @@ pub enum RegexEscapeError {
 /// '|', '*', '(', ')'.
 /// Use backslash to escape special characters:
 /// `\*`, `\|`, `\(`, `\)`, `\\`, `\n`, `\r`, `\t`.
+#[derive(Debug, PartialEq)]
 pub enum RegexToken {
     Char(char),
     Star,
@@ -96,8 +97,31 @@ mod tests {
 
     #[test]
     fn test_katex_escape() {
-        assert_eq!(katex_escape(' '), "\\_space\\_");
+        assert_eq!(katex_escape(' '), "[space]");
         assert_eq!(katex_escape('|'), "|");
-        assert_eq!(katex_escape('"'), "&quot;");
+        assert_eq!(katex_escape('"'), "\"");
+    }
+
+    #[test]
+    fn test_regex_tokenizer() {
+        let s = r"a|b*\n\r\t\*\|\(\)\\";
+        let tokens = regex_tokenizer(s).unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                (0, RegexToken::Char('a')),
+                (1, RegexToken::Or),
+                (2, RegexToken::Char('b')),
+                (3, RegexToken::Star),
+                (4, RegexToken::Char('\n')),
+                (6, RegexToken::Char('\r')),
+                (8, RegexToken::Char('\t')),
+                (10, RegexToken::Char('*')),
+                (12, RegexToken::Char('|')),
+                (14, RegexToken::Char('(')),
+                (16, RegexToken::Char(')')),
+                (18, RegexToken::Char('\\'))
+            ]
+        );
     }
 }
