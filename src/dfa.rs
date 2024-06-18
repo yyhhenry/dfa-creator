@@ -1,4 +1,5 @@
 use crate::{
+    escape::{katex_escape, mermaid_escape},
     nfa::Nfa,
     numberer::{set2s, DisjointSet, Numberer},
     wasm::{DfaJson, NfaJson},
@@ -94,6 +95,7 @@ impl DfaJson {
             result.push_str(&format!("{}{}\n", state, shape));
         }
         for (state, c, next) in dfa.transitions {
+            let c = mermaid_escape(c);
             result.push_str(&format!("{} --> |{}| {};\n", state, c, next));
         }
         result
@@ -273,9 +275,9 @@ impl Dfa {
         markdown.push_str(&groups2s(&mut index, &groups));
         while let Some((g, c)) = find_break_point(&dfa, &groups) {
             markdown.push_str(&format!(
-                "\n$\\{{{}\\}}$ can be divided by {}\n",
+                "\n$\\{{{}\\}}$ can be divided by ${}$\n",
                 set2s(&groups[g]),
-                c
+                katex_escape(c)
             ));
             let group_of = get_groups_of(&groups);
             let mut new_groups = BTreeMap::new();
@@ -288,9 +290,9 @@ impl Dfa {
                         .or_insert_with(BTreeSet::new)
                         .insert(s);
                     markdown.push_str(&format!(
-                        "\n{} with {} goes to {} in $\\{{ {} \\}}$\n",
+                        "\n{} with ${}$ goes to {} in $\\{{ {} \\}}$\n",
                         s,
-                        c,
+                        katex_escape(c),
                         next,
                         set2s(&groups[next_g])
                     ));
@@ -299,7 +301,7 @@ impl Dfa {
                         .entry(None)
                         .or_insert_with(BTreeSet::new)
                         .insert(s);
-                    markdown.push_str(&format!("\n{} cannot go with {}\n", s, c));
+                    markdown.push_str(&format!("\n{} cannot go with ${}$\n", s, katex_escape(c)));
                 }
             }
             groups.remove(g);

@@ -6,6 +6,7 @@ use thiserror::Error;
 
 use crate::{
     dfa::Dfa,
+    escape::{katex_escape, mermaid_escape, regex_tokenizer, RegexEscapeError, RegexToken},
     numberer::{set2s, DisjointSet, Numberer},
     wasm::{DfaJson, NfaJson},
 };
@@ -16,10 +17,12 @@ pub enum RegexSyntaxError {
     UnmatchedParentheses(String),
     #[error("No Element to Star: {0}")]
     NoElementToStar(String),
+    #[error(transparent)]
+    InvalidEscapeSequence(#[from] RegexEscapeError),
 }
 #[derive(Error, Debug)]
 pub enum FromJsonError {
-    #[error("From Json Error: {0}")]
+    #[error(transparent)]
     SyntaxError(#[from] serde_json::error::Error),
 }
 type Token = Option<char>;
@@ -107,7 +110,7 @@ impl NfaJson {
             result.push_str(&format!("{}{}\n", state, shape));
         }
         for (state, c, next) in nfa.transitions {
-            let c = c.unwrap_or('ε');
+            let c = mermaid_escape(c.unwrap_or('ε'));
             result.push_str(&format!("{} --> |{}| {};\n", state, c, next));
         }
         result
@@ -278,71 +281,63 @@ impl Nfa {
         }
         result
     }
-    /// Create an NFA from a regular expression.
-    /// We only support the following syntax:
-    /// ```txt
-    /// <regex> ::= <term> '|' <regex> | <term>
-    /// <term> ::= <factor> <term> | <factor>
-    /// <factor> ::= <base> '*' | <base>
-    /// <base> ::= <char> | '(' <regex> ')'
-    /// ```
-    pub fn from_regex(reg: &str) -> Result<Self, RegexSyntaxError> {
-        #[derive(Debug)]
-        enum Elem {
-            Base(Nfa),
-            Star,
-            Or,
-        }
-        let mut stack = vec![];
-        let mut elem_list = vec![];
-        for (i, c) in reg.chars().enumerate() {
-            match (c, stack.len()) {
-                ('(', _) => stack.push(i),
-                (')', _) => {
-                    let start = stack.pop().ok_or_else(|| {
-                        RegexSyntaxError::UnmatchedParentheses(format!("')' at {} in {}", i, reg))
+    fn from_regex_tokens(
+        origin: &str,
+        tokens: &[(usize, RegexToken)],
+    ) -> Result<Nfa, RegexSyntaxError> {
+        use RegexSyntaxError::*;
+        use RegexToken::*;
+        let mut l_parens = vec![];
+        let mut to_or = vec![];
+        let mut term = vec![];
+        for (i, (pos, token)) in tokens.iter().enumerate() {
+            match (token, l_parens.is_empty()) {
+                (LParen, _) => {
+                    l_parens.push(i);
+                }
+                (RParen, _) => {
+                    let start = l_parens.pop().ok_or_else(|| {
+                        UnmatchedParentheses(format!("')' at {} in {}", pos, origin))
                     })?;
-                    if stack.is_empty() {
-                        elem_list.push(Elem::Base(Nfa::from_regex(&reg[start + 1..i])?));
+                    if l_parens.is_empty() {
+                        term.push(Self::from_regex_tokens(origin, &tokens[start + 1..i])?);
                     }
                 }
-                ('*', 0) => elem_list.push(Elem::Star),
-                ('|', 0) => elem_list.push(Elem::Or),
-                (_, 0) => elem_list.push(Elem::Base(Nfa::from(Some(c)))),
+                (Star, true) => match term.pop() {
+                    Some(nfa) => term.push(nfa.star()),
+                    _ => return Err(NoElementToStar(format!("'*' at {} in {}", pos, origin))),
+                },
+                (Or, true) => {
+                    to_or.push(Self::concat_all(&term));
+                    term.clear();
+                }
+                (Char(c), true) => term.push(Self::from(Some(*c))),
                 _ => {}
             }
         }
-        if !stack.is_empty() {
-            return Err(RegexSyntaxError::UnmatchedParentheses(format!(
+        if let Some(i) = l_parens.pop() {
+            let pos = tokens[i].0;
+            return Err(UnmatchedParentheses(format!(
                 "'(' at {} in {}",
-                stack[0], reg
+                pos, origin
             )));
         }
-        // Apply all stars
-        let origin_elem_list = elem_list.drain(..).collect::<Vec<_>>();
-        for elem in origin_elem_list {
-            match elem {
-                Elem::Star => match elem_list.pop() {
-                    Some(Elem::Base(prev)) => elem_list.push(Elem::Base(prev.star())),
-                    _ => return Err(RegexSyntaxError::NoElementToStar(reg.to_string())),
-                },
-                elem => elem_list.push(elem),
-            }
-        }
-        let mut result = vec![Nfa::from(None)];
-        for elem in elem_list {
-            match elem {
-                Elem::Base(nfa) => {
-                    let prev = result.pop().unwrap();
-                    result.push(prev.concat(&nfa));
-                }
-                _ => {
-                    result.push(Nfa::from(None));
-                }
-            }
-        }
-        let result = Self::or_all(&result);
-        Ok(result)
+        to_or.push(Self::concat_all(&term));
+        Ok(Self::or_all(&to_or))
+    }
+    /// Create an NFA from a regular expression.
+    /// We only support the following syntax:
+    /// ```txt
+    /// <regex> ::= <regex> '|' <term>  | <term>
+    /// <term> ::= <term> <factor> | epsilon
+    /// <factor> ::= <factor> '*' | <base>
+    /// <base> ::= <char> | '(' <regex> ')'
+    /// ```
+    /// Use backslash to escape special characters:
+    /// `\*`, `\|`, `\(`, `\)`, `\\`, `\n`, `\r`, `\t`.
+    pub fn from_regex(reg: &str) -> Result<Self, RegexSyntaxError> {
+        let tokens = regex_tokenizer(reg)?;
+        Self::from_regex_tokens(reg, &tokens)
     }
     pub fn epsilon_closure(&self, state: impl Borrow<BTreeSet<usize>>) -> BTreeSet<usize> {
         let state: &BTreeSet<_> = state.borrow();
@@ -405,7 +400,7 @@ impl Nfa {
                 markdown.push_str(&format!(
                     "\n- $\\varepsilon \\text{{-}} closure(move(T_{{{}}}, {})) = \\{{{}\\}} = T_{{{}}}$\n",
                     current,
-                    c,
+                    katex_escape(c),
                     set2s(&next_set),
                     next
                 ));
@@ -567,10 +562,16 @@ mod test {
         );
         // No element to star
         let nfa = Nfa::from_regex("a(*b|c)d");
-        assert_eq!(nfa.unwrap_err().to_string(), "No Element to Star: *b|c");
+        assert_eq!(
+            nfa.unwrap_err().to_string(),
+            "No Element to Star: '*' at 2 in a(*b|c)d"
+        );
 
         let nfa = Nfa::from_regex("a|*c");
-        assert_eq!(nfa.unwrap_err().to_string(), "No Element to Star: a|*c");
+        assert_eq!(
+            nfa.unwrap_err().to_string(),
+            "No Element to Star: '*' at 2 in a|*c"
+        );
     }
 
     #[test]
@@ -629,5 +630,12 @@ mod test {
         assert_eq!(nfa.test("b"), false);
         assert_eq!(nfa.test("abbaab"), true);
         assert_eq!(nfa.test("baa"), false);
+    }
+
+    #[test]
+    fn escape_test() {
+        let nfa = Nfa::from_regex(r"\*\|\(\)\n\r\t").unwrap();
+        assert_eq!(nfa.test("*|()\n\r\t"), true);
+        assert_eq!(nfa.test(r"\*\|\(\)\n\r\t"), false);
     }
 }
