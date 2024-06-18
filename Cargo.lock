@@ -124,6 +124,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tsify",
+ "v_htmlescape",
  "wasm-bindgen",
 ]
 
@@ -312,6 +313,12 @@ name = "utf8parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
+
+[[package]]
+name = "v_htmlescape"
+version = "0.15.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e8257fbc510f0a46eb602c10215901938b5c2a7d5e70fc11483b1d3c9b5b18c"
 
 [[package]]
 name = "wasm-bindgen"
