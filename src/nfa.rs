@@ -182,6 +182,12 @@ impl Nfa {
         let (sl, lhs) = self.re_index(0);
         let (sr, rhs) = rhs.re_index(sl);
 
+        if sl + sr == 2 {
+            // Only Accept the empty string
+            // But we will get a epsilon transition using union rules below
+            return Nfa::from(None);
+        }
+
         let l_pure = lhs.is_pure();
         let r_pure = rhs.is_pure();
 
@@ -602,6 +608,10 @@ mod test {
         assert_eq!(nfa.test("b"), true);
         assert_eq!(nfa.test("a"), false);
         assert_eq!(nfa.test("bb"), false);
+
+        let nfa = Nfa::from_regex("|(|)").unwrap();
+        assert_eq!(nfa.test(""), true);
+        assert!(NfaJson::from(&nfa).transitions.is_empty());
     }
 
     #[test]
