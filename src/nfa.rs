@@ -181,11 +181,15 @@ impl Nfa {
             .or_insert_with(BTreeSet::new)
             .insert(next);
     }
+    /// One-state NFA that accepts the empty string.
+    pub fn is_empty(&self) -> bool {
+        self.accept == self.start && self.transitions.is_empty()
+    }
     pub fn or(&self, rhs: &Self) -> Nfa {
         let (sl, lhs) = self.re_index(0);
         let (sr, rhs) = rhs.re_index(sl);
 
-        if lhs.transitions.is_empty() && rhs.transitions.is_empty() {
+        if lhs.is_empty() && rhs.is_empty() {
             // Only Accept the empty string
             // But we will get a epsilon transition using union rules below
             return Nfa::from(None);
