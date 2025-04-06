@@ -1,5 +1,6 @@
 {
   "name": "dfa-creator",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "build": "run-s build-only type-check",
